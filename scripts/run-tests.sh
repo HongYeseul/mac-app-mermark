@@ -28,6 +28,11 @@ run_suite note-store \
     "$ROOT/Mermark/Notes/NoteStore.swift" \
     "$ROOT/Tests/NoteStoreTests/main.swift"
 
+run_suite quick-capture \
+    "$ROOT/Mermark/Notes/NoteStore.swift" \
+    "$ROOT/Mermark/QuickCapture/GlobalHotKey.swift" \
+    "$ROOT/Tests/QuickCaptureTests/main.swift"
+
 run_suite editor-scroll \
     "$ROOT/Mermark/Editor/LineMath.swift" \
     "$ROOT/Mermark/Editor/MarkdownSyntax.swift" \

@@ -69,7 +69,7 @@ final class NoteStore: ObservableObject {
     }
 
     private func openFolder(_ url: URL) {
-        folderURL = url
+        folderURL = url.standardizedFileURL
         reloadNotes()
         if selectedNoteURL == nil {
             select(notes.first?.url)
@@ -90,6 +90,9 @@ final class NoteStore: ObservableObject {
 
         notes = urls
             .filter { $0.pathExtension.lowercased() == "md" }
+            // 목록은 /private/var, 직접 만든 URL은 /var 형태로 나와 == 비교가 어긋난다.
+            // 표기를 맞춰야 이름 변경 후에도 사이드바 선택이 유지된다.
+            .map { $0.standardizedFileURL }
             .map { url in
                 let modifiedAt = (try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
                 return Note(url: url, modifiedAt: modifiedAt)
@@ -170,6 +173,31 @@ final class NoteStore: ObservableObject {
         currentText = ""
         tracksFilename = true
         focusRequestID += 1
+    }
+
+    /// 메뉴바·전역 단축키에서 부르는 빠른 메모. 제목을 묻지 않고 시각으로 파일명을 만든다.
+    /// 메인 창의 선택 상태는 건드리지 않는다.
+    @discardableResult
+    func quickCapture(_ text: String, at timestamp: Date = Date()) -> URL? {
+        let body = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !body.isEmpty, folderURL != nil,
+              let url = uniqueURL(for: Self.captureName(for: timestamp), excluding: nil) else { return nil }
+        do {
+            try body.write(to: url, atomically: true, encoding: .utf8)
+        } catch {
+            NSLog("빠른 메모 저장 실패: \(error.localizedDescription)")
+            return nil
+        }
+        reloadNotes()
+        return url
+    }
+
+    static func captureName(for timestamp: Date) -> String {
+        let formatter = DateFormatter()
+        // 사용자 지역 설정에 따라 형식이 흔들리지 않도록 고정한다
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd HHmm"
+        return formatter.string(from: timestamp)
     }
 
     // MARK: - 자동 저장

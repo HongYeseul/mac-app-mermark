@@ -1,14 +1,17 @@
 import SwiftUI
+import Carbon.HIToolbox
 
 @main
 struct MermarkApp: App {
     @StateObject private var store = NoteStore()
+    @StateObject private var quickCapture = QuickCaptureCoordinator()
     @AppStorage("viewMode") private var mode: ViewMode = .split
     @AppStorage("showsOutline") private var showsOutline = false
 
     var body: some Scene {
         WindowGroup {
             ContentView(store: store)
+                .onAppear { quickCapture.start(store: store) }
         }
         .commands {
             CommandGroup(replacing: .newItem) {
@@ -42,6 +45,11 @@ struct MermarkApp: App {
         Settings {
             SettingsView()
         }
+
+        MenuBarExtra("빠른 메모", systemImage: "square.and.pencil") {
+            QuickCaptureView(store: store)
+        }
+        .menuBarExtraStyle(.window)
     }
 
     private func exportAllDiagrams() {

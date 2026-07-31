@@ -29,6 +29,8 @@ Mermaid 다이어그램을 **바로 이미지로 뽑아 쓰는** macOS 마크다
 - **수식** — `$E = mc^2$` 인라인과 `$$...$$` 블록을 KaTeX로 조판. 폰트까지 번들해 오프라인에서 동작
 - **프론트매터** — 문서 앞의 `---` 블록을 표 형태로 정리해 보여줍니다
 - **PDF 내보내기** — `⌘⇧P`로 렌더된 문서 전체를 PDF로 저장
+- **빠른 메모** — 메뉴바 아이콘이나 어디서든 `⌘⇧N`으로 창을 띄워 바로 적고 `⌘⏎`로 저장.
+  파일명은 `2026-07-31 1432.md`처럼 시각이 됩니다
 - **완전 오프라인** — 마크다운·다이어그램·수식·코드 강조 라이브러리를 모두 앱에 번들
 
 ## 요구 사항
@@ -63,6 +65,8 @@ Xcode에서 `Mermark.xcodeproj`를 열고 Run 해도 됩니다.
 | `⌘⌥T` | 목차 패널 열기/닫기 |
 | `⌘⇧E` | 문서 안 모든 다이어그램을 한 폴더에 내보내기 |
 | `⌘⇧P` | 문서 전체를 PDF로 내보내기 |
+| `⌘⇧N` | 어디서든 빠른 메모 창 (전역 단축키) |
+| 메뉴바 ✏️ 아이콘 | 빠른 메모 팝오버 |
 | `⌘,` | 내보내기 설정 (해상도 · 테마 · 배경) |
 | 사이드바 검색창 | 제목과 본문을 함께 검색 |
 | Mermaid 블록에 마우스 올리기 | `PNG 복사 · PNG 저장 · SVG 저장` 툴바 |
@@ -138,6 +142,7 @@ Mermaid 블록처럼 "원본 6줄 = 화면 300px"인 구간에서도 어긋나�
 | `image-resources` | 상대경로 이미지 해석과 실제 `WKWebView` 로드 17 케이스 |
 | `link-routing` | 노트 간 이동·앵커·외부 링크 라우팅과 헤딩 슬러그 23 케이스 |
 | `document-export` | 프론트매터 표시와 PDF 생성·텍스트 포함 여부 16 케이스 |
+| `quick-capture` | 빠른 메모 저장 규칙과 전역 단축키 등록·해제 16 케이스 |
 | `math` | KaTeX 조판·폰트 로드·통화 표기 오탐 방지 16 케이스 |
 | `view-mode` | 실제 `NSHostingView`로 모드 전환 시 상태 보존 12 케이스 |
 
@@ -168,6 +173,11 @@ Mermark/
 │   ├── ExportOptions.swift     해상도·테마·배경 옵션
 │   ├── PDFExporter.swift       문서 전체 PDF 저장
 │   └── MarkdownPreview.swift   SwiftUI 래퍼
+├── QuickCapture/
+│   ├── QuickCaptureView.swift  메뉴바·단축키가 함께 쓰는 입력 화면
+│   ├── QuickCapturePanel.swift 전역 단축키로 띄우는 떠 있는 창
+│   ├── GlobalHotKey.swift      Carbon 기반 전역 단축키 등록
+│   └── QuickCaptureCoordinator.swift  단축키와 패널 연결
 └── Resources/
     ├── preview.html          프리뷰 템플릿 (data-line, 호버 툴바, 스크롤 API)
     ├── export.html           내보내기 전용 최소 템플릿
@@ -193,7 +203,6 @@ Xcode의 synchronized folder는 리소스를 번들 `Resources` 루트에 **평�
 
 ## 남은 작업
 
-- 메뉴바 퀵 캡처와 전역 단축키
 - 태그
 
 ## 알려진 제약
@@ -206,6 +215,8 @@ Xcode의 synchronized folder는 리소스를 번들 `Resources` 루트에 **평�
 - PDF는 쪽을 나누지 않고 문서 길이만큼 긴 한 장으로 나옵니다. 쪽을 나눠 주는
   `WKWebView.printOperation`은 `run()`이 반환되지 않아 앱이 멈추므로 쓰지 않습니다
 - 프론트매터는 `키: 값`과 `- 항목` 목록만 표시합니다. 중첩 구조는 다루지 않습니다
+- 전역 단축키 `⌘⇧N`은 다른 앱이 이미 쓰고 있으면 등록에 실패합니다. 이때는 메뉴바 아이콘으로
+  빠른 메모를 쓸 수 있고, 실패 사실은 콘솔 로그에 남습니다
 
 ## 라이선스
 

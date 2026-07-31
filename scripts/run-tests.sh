@@ -68,6 +68,10 @@ run_suite link-routing \
     "$ROOT/Mermark/Preview/PreviewLinkRouter.swift" \
     "$ROOT/Tests/LinkRoutingTests/main.swift"
 
+run_suite document-export \
+    "$ROOT/Mermark/Preview/PDFExporter.swift" \
+    "$ROOT/Tests/DocumentExportTests/main.swift"
+
 run_suite math \
     "$ROOT/Tests/MathTests/main.swift"
 

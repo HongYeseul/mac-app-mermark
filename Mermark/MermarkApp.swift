@@ -22,6 +22,9 @@ struct MermarkApp: App {
                 Button("모든 다이어그램 내보내기…") { exportAllDiagrams() }
                     .keyboardShortcut("e", modifiers: [.command, .shift])
                     .disabled(store.selectedNoteURL == nil)
+                Button("PDF로 내보내기…") { store.onExportPDF?() }
+                    .keyboardShortcut("p", modifiers: [.command, .shift])
+                    .disabled(store.selectedNoteURL == nil)
             }
             CommandMenu("보기") {
                 Button("뷰어") { mode = .viewer }

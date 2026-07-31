@@ -149,6 +149,10 @@ struct ContentView: View {
         editor.onTextChange = { store.textChanged($0) }
         editor.onScrollToLine = { preview.scroll(toLine: $0) }
         preview.onScrollToLine = { editor.scroll(toLine: $0) }
+        store.onExportPDF = {
+            let name = store.selectedNoteURL?.deletingPathExtension().lastPathComponent ?? "document"
+            preview.exportPDF(defaultName: name)
+        }
         preview.onOpenNote = { noteURL, anchor in
             store.select(noteURL)
             if let anchor { preview.scroll(toAnchor: anchor) }

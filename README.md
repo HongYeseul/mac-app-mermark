@@ -27,6 +27,8 @@ Mermaid 다이어그램을 **바로 이미지로 뽑아 쓰는** macOS 마크다
   외부 주소는 기본 브라우저로 넘깁니다
 - **외부 변경 자동 반영** — 노트 폴더를 Finder나 다른 에디터로 고치면 앱이 알아서 갱신
 - **수식** — `$E = mc^2$` 인라인과 `$$...$$` 블록을 KaTeX로 조판. 폰트까지 번들해 오프라인에서 동작
+- **프론트매터** — 문서 앞의 `---` 블록을 표 형태로 정리해 보여줍니다
+- **PDF 내보내기** — `⌘⇧P`로 렌더된 문서 전체를 PDF로 저장
 - **완전 오프라인** — 마크다운·다이어그램·수식·코드 강조 라이브러리를 모두 앱에 번들
 
 ## 요구 사항
@@ -60,6 +62,7 @@ Xcode에서 `Mermark.xcodeproj`를 열고 Run 해도 됩니다.
 | `⌘1` / `⌘2` / `⌘3` | 뷰어 / 에디터 / 분할 모드 |
 | `⌘⌥T` | 목차 패널 열기/닫기 |
 | `⌘⇧E` | 문서 안 모든 다이어그램을 한 폴더에 내보내기 |
+| `⌘⇧P` | 문서 전체를 PDF로 내보내기 |
 | `⌘,` | 내보내기 설정 (해상도 · 테마 · 배경) |
 | 사이드바 검색창 | 제목과 본문을 함께 검색 |
 | Mermaid 블록에 마우스 올리기 | `PNG 복사 · PNG 저장 · SVG 저장` 툴바 |
@@ -134,6 +137,7 @@ Mermaid 블록처럼 "원본 6줄 = 화면 300px"인 구간에서도 어긋나�
 | `batch-export` | 실제 `MermaidExporter`로 일괄 내보내기 파일 생성 10 케이스 |
 | `image-resources` | 상대경로 이미지 해석과 실제 `WKWebView` 로드 17 케이스 |
 | `link-routing` | 노트 간 이동·앵커·외부 링크 라우팅과 헤딩 슬러그 23 케이스 |
+| `document-export` | 프론트매터 표시와 PDF 생성·텍스트 포함 여부 16 케이스 |
 | `math` | KaTeX 조판·폰트 로드·통화 표기 오탐 방지 16 케이스 |
 | `view-mode` | 실제 `NSHostingView`로 모드 전환 시 상태 보존 12 케이스 |
 
@@ -162,6 +166,7 @@ Mermark/
 │   ├── LocalResourceHandler.swift  상대경로 이미지용 전용 URL 스킴
 │   ├── PreviewLinkRouter.swift 링크 클릭 처리 규칙
 │   ├── ExportOptions.swift     해상도·테마·배경 옵션
+│   ├── PDFExporter.swift       문서 전체 PDF 저장
 │   └── MarkdownPreview.swift   SwiftUI 래퍼
 └── Resources/
     ├── preview.html          프리뷰 템플릿 (data-line, 호버 툴바, 스크롤 API)
@@ -188,7 +193,6 @@ Xcode의 synchronized folder는 리소스를 번들 `Resources` 루트에 **평�
 
 ## 남은 작업
 
-- 문서 전체 PDF 내보내기, 프론트매터 표시
 - 메뉴바 퀵 캡처와 전역 단축키
 - 태그
 
@@ -199,6 +203,9 @@ Xcode의 synchronized folder는 리소스를 번들 `Resources` 루트에 **평�
   설정한 배율보다 작게 나올 수 있습니다
 - 목차는 `#` 방식(ATX) 헤딩만 인식합니다. 밑줄(setext) 방식은 아직 지원하지 않습니다
 - 앱 서명을 하지 않으므로 다른 Mac으로 옮기면 Gatekeeper 경고가 납니다
+- PDF는 쪽을 나누지 않고 문서 길이만큼 긴 한 장으로 나옵니다. 쪽을 나눠 주는
+  `WKWebView.printOperation`은 `run()`이 반환되지 않아 앱이 멈추므로 쓰지 않습니다
+- 프론트매터는 `키: 값`과 `- 항목` 목록만 표시합니다. 중첩 구조는 다루지 않습니다
 
 ## 라이선스
 

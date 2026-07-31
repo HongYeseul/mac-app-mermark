@@ -62,6 +62,22 @@ final class PreviewController: NSObject, ObservableObject, WKNavigationDelegate,
         webView.evaluateJavaScript("window.scrollPreviewToLine(\(line));")
     }
 
+    /// 지금 보이는 문서를 PDF로 저장한다
+    func exportPDF(defaultName: String) {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.pdf]
+        panel.nameFieldStringValue = defaultName + ".pdf"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+
+        PDFExporter.export(webView, to: url) { error in
+            guard let error else { return }
+            let alert = NSAlert()
+            alert.messageText = "PDF 내보내기 오류"
+            alert.informativeText = error.localizedDescription
+            alert.runModal()
+        }
+    }
+
     /// 노트를 새로 연 직후에는 렌더가 끝나야 앵커 위치를 알 수 있어 예약해 둔다
     func scroll(toAnchor anchor: String) {
         pendingAnchor = anchor

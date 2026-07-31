@@ -19,6 +19,8 @@ final class NoteStore: ObservableObject {
     /// Cmd+N 직후 에디터로 포커스를 넘기기 위한 신호 (값이 바뀌면 에디터가 first responder가 됨)
     @Published private(set) var focusRequestID = 0
     @Published var searchQuery = ""
+    /// 메뉴에서 PDF 내보내기를 고르면 프리뷰 쪽에서 처리하도록 ContentView가 연결한다
+    var onExportPDF: (() -> Void)?
 
     static let untitledName = "새 노트"
     private static let maxTitleLength = 50

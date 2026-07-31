@@ -70,6 +70,27 @@
     return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   }
 
+  // 헤딩에 id를 붙여 "[링크](#섹션-이름)" 앵커가 동작하게 한다. GitHub과 같은 규칙.
+  function slugify(text) {
+    return text.trim().toLowerCase()
+      .replace(/[^\p{L}\p{N}\s_-]/gu, "")
+      .replace(/\s+/g, "-");
+  }
+
+  md.core.ruler.push("mermark_heading_anchors", (state) => {
+    const used = new Map();
+    state.tokens.forEach((token, index) => {
+      if (token.type !== "heading_open") return;
+      const inline = state.tokens[index + 1];
+      if (!inline || inline.type !== "inline") return;
+      let slug = slugify(inline.content) || "section";
+      const seen = used.get(slug) || 0;
+      used.set(slug, seen + 1);
+      if (seen > 0) slug = slug + "-" + seen;
+      token.attrSet("id", slug);
+    });
+  });
+
   // 최상위 블록마다 원본 줄 번호를 심는다 (에디터 ↔ 프리뷰 스크롤 동기화의 앵커)
   md.core.ruler.push("mermark_line_numbers", (state) => {
     for (const token of state.tokens) {
@@ -123,9 +144,21 @@
     }
   }
 
+  // 상대경로 링크도 같은 스킴으로 바꾼다. Swift가 가로채 앱 안에서 노트를 연다.
+  function resolveLocalLinks() {
+    for (const anchor of document.querySelectorAll("#content a")) {
+      const href = anchor.getAttribute("href");
+      if (!href || href.startsWith("#")) continue;
+      if (/^[a-z][a-z0-9+.-]*:/i.test(href) || href.startsWith("//")) continue;
+      const host = href.startsWith("/") ? "folder" : "note";
+      anchor.setAttribute("href", "mermark-local://" + host + "/" + href.replace(/^\/+/, ""));
+    }
+  }
+
   window.renderMarkdown = async (markdown) => {
     document.getElementById("content").innerHTML = md.render(markdown);
     resolveLocalImages();
+    resolveLocalLinks();
     lastReportedLine = -1;
     try {
       await mermaid.run({ nodes: document.querySelectorAll("pre.mermaid") });
@@ -168,6 +201,17 @@
     clearTimeout(suppressTimer);
     suppressTimer = setTimeout(() => { suppressScrollReport = false; }, 250);
     window.scrollTo(0, base.offsetTop + (next.offsetTop - base.offsetTop) * ratio);
+  };
+
+  /// 다른 노트를 "#섹션" 링크로 열었을 때 해당 헤딩으로 이동한다
+  window.scrollPreviewToAnchor = (anchor) => {
+    const target = document.getElementById(anchor);
+    if (!target) return false;
+    suppressScrollReport = true;
+    clearTimeout(suppressTimer);
+    suppressTimer = setTimeout(() => { suppressScrollReport = false; }, 250);
+    window.scrollTo(0, target.offsetTop);
+    return true;
   };
 
   window.currentPreviewLine = () => {

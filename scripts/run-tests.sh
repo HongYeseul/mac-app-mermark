@@ -56,6 +56,11 @@ run_suite image-resources \
     "$ROOT/Mermark/Preview/LocalResourceHandler.swift" \
     "$ROOT/Tests/ImageResourceTests/main.swift"
 
+run_suite link-routing \
+    "$ROOT/Mermark/Preview/LocalResourceHandler.swift" \
+    "$ROOT/Mermark/Preview/PreviewLinkRouter.swift" \
+    "$ROOT/Tests/LinkRoutingTests/main.swift"
+
 run_suite view-mode \
     "$ROOT/Tests/ViewModeTests/main.swift"
 

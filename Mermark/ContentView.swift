@@ -149,6 +149,10 @@ struct ContentView: View {
         editor.onTextChange = { store.textChanged($0) }
         editor.onScrollToLine = { preview.scroll(toLine: $0) }
         preview.onScrollToLine = { editor.scroll(toLine: $0) }
+        preview.onOpenNote = { noteURL, anchor in
+            store.select(noteURL)
+            if let anchor { preview.scroll(toAnchor: anchor) }
+        }
     }
 
     private var selectionBinding: Binding<URL?> {

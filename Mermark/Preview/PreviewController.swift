@@ -7,11 +7,14 @@ final class PreviewController: NSObject, ObservableObject, WKNavigationDelegate,
     let webView: WKWebView
 
     var onScrollToLine: ((Int) -> Void)?
+    /// 프리뷰에서 다른 노트 링크를 눌렀을 때 (파일 URL, 앵커)
+    var onOpenNote: ((URL, String?) -> Void)?
 
     private var isPageReady = false
     private var latestMarkdown: String?
     private var renderWorkItem: DispatchWorkItem?
     private var pendingScrollLine: Int?
+    private var pendingAnchor: String?
 
     private let resourceHandler: LocalResourceHandler
 
@@ -59,20 +62,68 @@ final class PreviewController: NSObject, ObservableObject, WKNavigationDelegate,
         webView.evaluateJavaScript("window.scrollPreviewToLine(\(line));")
     }
 
+    /// 노트를 새로 연 직후에는 렌더가 끝나야 앵커 위치를 알 수 있어 예약해 둔다
+    func scroll(toAnchor anchor: String) {
+        pendingAnchor = anchor
+        applyPendingAnchor()
+    }
+
+    private func applyPendingAnchor() {
+        guard isPageReady, let anchor = pendingAnchor,
+              let data = try? JSONEncoder().encode(anchor),
+              let json = String(data: data, encoding: .utf8) else { return }
+        webView.evaluateJavaScript("window.scrollPreviewToAnchor(\(json));") { [weak self] found, _ in
+            // 아직 렌더 전이라 찾지 못했다면 다음 렌더 후에 다시 시도한다
+            if (found as? Bool) == true { self?.pendingAnchor = nil }
+        }
+    }
+
     private func renderNow() {
         guard let markdown = latestMarkdown,
               let data = try? JSONEncoder().encode(markdown),
               let json = String(data: data, encoding: .utf8) else { return }
         webView.evaluateJavaScript("window.renderMarkdown(\(json));") { [weak self] _, _ in
-            guard let self, let line = self.pendingScrollLine else { return }
-            self.pendingScrollLine = nil
-            self.scroll(toLine: line)
+            guard let self else { return }
+            if let line = self.pendingScrollLine {
+                self.pendingScrollLine = nil
+                self.scroll(toLine: line)
+            }
+            self.applyPendingAnchor()
         }
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         isPageReady = true
         renderNow()
+    }
+
+    /// 프리뷰 페이지가 다른 문서로 바뀌지 않도록 링크 이동을 가로챈다 (PLAN.md 5)
+    func webView(_ webView: WKWebView,
+                 decidePolicyFor navigationAction: WKNavigationAction,
+                 decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+        guard navigationAction.navigationType == .linkActivated,
+              let url = navigationAction.request.url else {
+            decisionHandler(.allow)
+            return
+        }
+
+        switch PreviewLinkRouter.action(
+            for: url,
+            currentPage: webView.url,
+            noteDirectory: resourceHandler.noteDirectory,
+            rootDirectory: resourceHandler.rootDirectory
+        ) {
+        case .openNote(let noteURL, let anchor):
+            decisionHandler(.cancel)
+            onOpenNote?(noteURL, anchor)
+        case .openExternally(let target):
+            decisionHandler(.cancel)
+            NSWorkspace.shared.open(target)
+        case .allowInPage:
+            decisionHandler(.allow)
+        case .block:
+            decisionHandler(.cancel)
+        }
     }
 
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {

@@ -4,6 +4,7 @@ import SwiftUI
 struct MermarkApp: App {
     @StateObject private var store = NoteStore()
     @AppStorage("viewMode") private var mode: ViewMode = .split
+    @AppStorage("showsOutline") private var showsOutline = false
 
     var body: some Scene {
         WindowGroup {
@@ -24,6 +25,9 @@ struct MermarkApp: App {
                     .keyboardShortcut("2", modifiers: .command)
                 Button("분할") { mode = .split }
                     .keyboardShortcut("3", modifiers: .command)
+                Divider()
+                Button(showsOutline ? "목차 숨기기" : "목차 보기") { showsOutline.toggle() }
+                    .keyboardShortcut("t", modifiers: [.command, .option])
             }
         }
     }

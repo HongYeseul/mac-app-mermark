@@ -18,6 +18,7 @@ final class NoteStore: ObservableObject {
     @Published var currentText: String = ""
     /// Cmd+N 직후 에디터로 포커스를 넘기기 위한 신호 (값이 바뀌면 에디터가 first responder가 됨)
     @Published private(set) var focusRequestID = 0
+    @Published var searchQuery = ""
 
     static let untitledName = "새 노트"
     private static let maxTitleLength = 50
@@ -28,6 +29,8 @@ final class NoteStore: ObservableObject {
     /// 파일명이 첫 줄과 이미 일치하는 노트만 이름을 따라가게 한다.
     /// 다른 앱에서 만든 "파일명 ≠ 제목" 노트를 앱이 멋대로 개명하지 않기 위한 안전장치.
     private var tracksFilename = false
+    /// 본문 검색용 캐시. 수정일이 그대로면 파일을 다시 읽지 않는다.
+    private var contentCache: [URL: (modifiedAt: Date, text: String)] = [:]
 
     init() {
         if let path = UserDefaults.standard.string(forKey: folderPathKey),
@@ -90,6 +93,35 @@ final class NoteStore: ObservableObject {
                 return Note(url: url, modifiedAt: modifiedAt)
             }
             .sorted { $0.modifiedAt > $1.modifiedAt }
+
+        let alive = Set(notes.map(\.url))
+        contentCache = contentCache.filter { alive.contains($0.key) }
+    }
+
+    /// 제목이 걸린 노트를 먼저, 본문만 걸린 노트를 뒤에 둔다. 대소문자와 자모 차이는 무시.
+    var filteredNotes: [Note] {
+        let query = searchQuery.trimmingCharacters(in: .whitespaces)
+        guard !query.isEmpty else { return notes }
+
+        var titleMatches: [Note] = []
+        var bodyMatches: [Note] = []
+        for note in notes {
+            if note.title.localizedStandardContains(query) {
+                titleMatches.append(note)
+            } else if content(of: note).localizedStandardContains(query) {
+                bodyMatches.append(note)
+            }
+        }
+        return titleMatches + bodyMatches
+    }
+
+    private func content(of note: Note) -> String {
+        if let cached = contentCache[note.url], cached.modifiedAt == note.modifiedAt {
+            return cached.text
+        }
+        let text = (try? String(contentsOf: note.url, encoding: .utf8)) ?? ""
+        contentCache[note.url] = (note.modifiedAt, text)
+        return text
     }
 
     // MARK: - 노트 선택 / 생성

@@ -33,6 +33,10 @@ run_suite editor-scroll \
     "$ROOT/Mermark/Editor/EditorController.swift" \
     "$ROOT/Tests/EditorTests/main.swift"
 
+run_suite outline \
+    "$ROOT/Mermark/Editor/MarkdownOutline.swift" \
+    "$ROOT/Tests/OutlineTests/main.swift"
+
 run_suite view-mode \
     "$ROOT/Tests/ViewModeTests/main.swift"
 

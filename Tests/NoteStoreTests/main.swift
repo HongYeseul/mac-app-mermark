@@ -134,6 +134,47 @@ pump(1.0)
 check("대기 중 저장이 삭제된 파일을 되살리지 않음", !exists(deletedName))
 check("전환된 노트 내용이 로드됨", store.selectedNoteURL == nil || !store.currentText.isEmpty)
 
+// MARK: - E. 전문 검색
+
+print("\n── E. 전문 검색 (제목 + 본문)")
+for name in try! fm.contentsOfDirectory(atPath: rootDir.path) {
+    try? fm.removeItem(at: rootDir.appendingPathComponent(name))
+}
+try! "# 배포 체크리스트\n서명과 공증 절차".write(to: rootDir.appendingPathComponent("배포 체크리스트.md"), atomically: true, encoding: .utf8)
+try! "# 회의록\n배포 일정 논의함".write(to: rootDir.appendingPathComponent("회의록.md"), atomically: true, encoding: .utf8)
+try! "# 잡담\n점심 메뉴".write(to: rootDir.appendingPathComponent("잡담.md"), atomically: true, encoding: .utf8)
+try! "# Release Notes\nMermaid EXPORT 기능".write(to: rootDir.appendingPathComponent("Release Notes.md"), atomically: true, encoding: .utf8)
+pump(1.5)
+
+let searchStore = NoteStore()
+pump(0.5)
+check("검색 전에는 전체 노트", searchStore.filteredNotes.count == 4, "\(searchStore.filteredNotes.map(\.title))")
+
+searchStore.searchQuery = "배포"
+let hits = searchStore.filteredNotes.map(\.title)
+check("제목·본문 모두에서 검색됨", Set(hits) == ["배포 체크리스트", "회의록"], "\(hits)")
+check("제목 일치가 본문 일치보다 앞", hits.first == "배포 체크리스트", "\(hits)")
+
+searchStore.searchQuery = "export"
+check("대소문자 무시 본문 검색", searchStore.filteredNotes.map(\.title) == ["Release Notes"],
+      "\(searchStore.filteredNotes.map(\.title))")
+
+searchStore.searchQuery = "  배포  "
+check("앞뒤 공백은 무시", searchStore.filteredNotes.count == 2, "\(searchStore.filteredNotes.map(\.title))")
+
+searchStore.searchQuery = "존재하지않는단어"
+check("결과 없으면 빈 목록", searchStore.filteredNotes.isEmpty, "\(searchStore.filteredNotes.map(\.title))")
+
+searchStore.searchQuery = ""
+check("검색어를 지우면 전체 복귀", searchStore.filteredNotes.count == 4)
+
+// 캐시가 오래된 내용을 붙들고 있지 않은지
+try! "# 잡담\n이제 배포 이야기".write(to: rootDir.appendingPathComponent("잡담.md"), atomically: true, encoding: .utf8)
+pump(1.5)
+searchStore.searchQuery = "배포"
+check("외부 수정 후 검색 결과 갱신", searchStore.filteredNotes.contains { $0.title == "잡담" },
+      "\(searchStore.filteredNotes.map(\.title))")
+
 print("\n" + (failures.isEmpty ? "ALL PASS (\(total) checks)" : "FAILURES(\(failures.count)/\(total)): \(failures.joined(separator: ", "))"))
 try? fm.removeItem(at: rootDir)
 exit(failures.isEmpty ? 0 : 1)

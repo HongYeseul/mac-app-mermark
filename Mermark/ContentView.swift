@@ -27,15 +27,21 @@ struct ContentView: View {
     @StateObject private var editor = EditorController()
     @StateObject private var preview = PreviewController()
     @AppStorage("viewMode") private var mode: ViewMode = .split
+    @AppStorage("showsOutline") private var showsOutline = false
+
+    private var headings: [Heading] {
+        MarkdownOutline.headings(in: store.currentText)
+    }
 
     var body: some View {
         NavigationSplitView {
             List(selection: selectionBinding) {
-                ForEach(store.notes) { note in
+                ForEach(store.filteredNotes) { note in
                     Label(note.title, systemImage: "doc.text")
                         .tag(note.url)
                 }
             }
+            .searchable(text: $store.searchQuery, placement: .sidebar, prompt: "제목·본문 검색")
             .navigationSplitViewColumnWidth(min: 180, ideal: 220)
         } detail: {
             detail
@@ -65,7 +71,18 @@ struct ContentView: View {
                 }
                 .pickerStyle(.segmented)
                 .help("뷰어 / 에디터 / 분할")
+
+                Button {
+                    showsOutline.toggle()
+                } label: {
+                    Image(systemName: "list.bullet.indent")
+                }
+                .help("목차 (⌘⌥T)")
             }
+        }
+        .inspector(isPresented: $showsOutline) {
+            outline
+                .inspectorColumnWidth(min: 180, ideal: 240, max: 360)
         }
         .onAppear(perform: connectScrollSync)
     }
@@ -93,6 +110,33 @@ struct ContentView: View {
                 }
             }
         }
+    }
+
+    @ViewBuilder
+    private var outline: some View {
+        if headings.isEmpty {
+            Text("헤딩이 없습니다")
+                .foregroundStyle(.secondary)
+        } else {
+            List(headings) { heading in
+                Button {
+                    jump(to: heading)
+                } label: {
+                    Text(heading.text)
+                        .font(heading.level <= 2 ? .body : .callout)
+                        .foregroundStyle(heading.level == 1 ? .primary : .secondary)
+                        .padding(.leading, CGFloat(heading.level - 1) * 12)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    /// 목차 항목은 양쪽 창을 모두 직접 옮긴다 (한쪽만 옮기면 숨겨진 창이 뒤처진다)
+    private func jump(to heading: Heading) {
+        editor.scroll(toLine: heading.line)
+        preview.scroll(toLine: heading.line)
     }
 
     /// 한쪽이 스크롤하면 반대쪽만 따라간다. 되돌아오는 것은 각 컨트롤러의 억제 구간이 막는다.

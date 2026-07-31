@@ -196,6 +196,13 @@ final class NoteStore: ObservableObject {
     }
 
     /// Cmd+N: 제목 입력 없이 빈 노트를 만들고 바로 타이핑할 수 있게 선택 + 포커스 (PLAN.md 4)
+    /// 메뉴·툴바에서 부르는 새 노트. 노트 폴더가 없으면 먼저 고르게 한다.
+    /// 폴더가 없다고 아무 반응이 없으면 기능이 막힌 것처럼 보인다.
+    func createNoteChoosingFolderIfNeeded() {
+        if folderURL == nil { chooseFolder() }
+        createNote()
+    }
+
     func createNote() {
         guard folderURL != nil, let url = uniqueURL(for: Self.untitledName, excluding: nil) else { return }
         flushPendingSave()

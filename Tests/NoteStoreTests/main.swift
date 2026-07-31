@@ -175,6 +175,30 @@ searchStore.searchQuery = "배포"
 check("외부 수정 후 검색 결과 갱신", searchStore.filteredNotes.contains { $0.title == "잡담" },
       "\(searchStore.filteredNotes.map(\.title))")
 
+// MARK: - F. 노트 폴더가 없을 때
+
+print("\n── F. 노트 폴더가 없을 때")
+UserDefaults.standard.removeObject(forKey: "notesFolderPath")
+let emptyStore = NoteStore()
+pump(0.3)
+check("폴더가 없으면 목록도 비어 있음", emptyStore.notes.isEmpty && emptyStore.folderURL == nil,
+      "\(emptyStore.notes.count)개")
+emptyStore.createNote()
+check("폴더가 없으면 새 노트를 만들지 않고 조용히 넘어감",
+      emptyStore.notes.isEmpty && emptyStore.selectedNoteURL == nil,
+      "\(emptyStore.selectedNoteURL?.lastPathComponent ?? "nil")")
+
+// 폴더가 생기면 곧바로 만들 수 있어야 한다
+UserDefaults.standard.set(rootDir.path, forKey: "notesFolderPath")
+let readyStore = NoteStore()
+pump(0.3)
+let beforeCount = readyStore.notes.count
+readyStore.createNote()
+check("폴더가 있으면 새 노트가 만들어짐", readyStore.notes.count == beforeCount + 1,
+      "\(beforeCount) → \(readyStore.notes.count)")
+check("만든 노트가 선택됨", readyStore.selectedNoteURL?.lastPathComponent.hasPrefix("새 노트") == true,
+      "\(readyStore.selectedNoteURL?.lastPathComponent ?? "nil")")
+
 print("\n" + (failures.isEmpty ? "ALL PASS (\(total) checks)" : "FAILURES(\(failures.count)/\(total)): \(failures.joined(separator: ", "))"))
 try? fm.removeItem(at: rootDir)
 exit(failures.isEmpty ? 0 : 1)

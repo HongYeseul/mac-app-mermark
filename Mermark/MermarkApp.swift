@@ -15,9 +15,8 @@ struct MermarkApp: App {
         }
         .commands {
             CommandGroup(replacing: .newItem) {
-                Button("새 노트") { store.createNote() }
+                Button("새 노트") { store.createNoteChoosingFolderIfNeeded() }
                     .keyboardShortcut("n", modifiers: .command)
-                    .disabled(store.folderURL == nil)
                 Button("노트 폴더 열기…") { store.chooseFolder() }
                     .keyboardShortcut("o", modifiers: .command)
             }

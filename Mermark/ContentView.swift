@@ -59,12 +59,11 @@ struct ContentView: View {
         .toolbar {
             ToolbarItemGroup {
                 Button {
-                    store.createNote()
+                    store.createNoteChoosingFolderIfNeeded()
                 } label: {
                     Image(systemName: "square.and.pencil")
                 }
                 .help("새 노트 (⌘N)")
-                .disabled(store.folderURL == nil)
 
                 Button {
                     store.chooseFolder()

@@ -25,7 +25,8 @@ Mermaid 다이어그램을 **바로 이미지로 뽑아 쓰는** macOS 마크다
 - **노트 간 링크** — `[다른 노트](./other.md)`를 누르면 앱 안에서 이동하고, `#섹션` 앵커까지 따라갑니다.
   외부 주소는 기본 브라우저로 넘깁니다
 - **외부 변경 자동 반영** — 노트 폴더를 Finder나 다른 에디터로 고치면 앱이 알아서 갱신
-- **완전 오프라인** — 마크다운·다이어그램·코드 강조 라이브러리를 모두 앱에 번들
+- **수식** — `$E = mc^2$` 인라인과 `$$...$$` 블록을 KaTeX로 조판. 폰트까지 번들해 오프라인에서 동작
+- **완전 오프라인** — 마크다운·다이어그램·수식·코드 강조 라이브러리를 모두 앱에 번들
 
 ## 요구 사항
 
@@ -131,6 +132,7 @@ Mermaid 블록처럼 "원본 6줄 = 화면 300px"인 구간에서도 어긋나�
 | `batch-export` | 실제 `MermaidExporter`로 일괄 내보내기 파일 생성 10 케이스 |
 | `image-resources` | 상대경로 이미지 해석과 실제 `WKWebView` 로드 17 케이스 |
 | `link-routing` | 노트 간 이동·앵커·외부 링크 라우팅과 헤딩 슬러그 23 케이스 |
+| `math` | KaTeX 조판·폰트 로드·통화 표기 오탐 방지 16 케이스 |
 | `view-mode` | 실제 `NSHostingView`로 모드 전환 시 상태 보존 12 케이스 |
 
 프리뷰의 `data-line` 앵커와 양방향 스크롤은 브라우저에서 `Mermark/Resources/preview.html`을
@@ -161,7 +163,8 @@ Mermark/
 └── Resources/
     ├── preview.html          프리뷰 템플릿 (data-line, 호버 툴바, 스크롤 API)
     ├── export.html           내보내기 전용 최소 템플릿
-    └── *.min.js, *.min.css   번들 라이브러리
+    ├── *.min.js, *.min.css   번들 라이브러리
+    └── KaTeX_*.woff2         수식 폰트 (평면 배치, scripts/fetch-vendor.sh 참고)
 ```
 
 AppKit 뷰를 SwiftUI 래퍼가 아니라 컨트롤러가 소유하는 것이 핵심입니다. 덕분에 모드를 전환해도
@@ -170,19 +173,18 @@ AppKit 뷰를 SwiftUI 래퍼가 아니라 컨트롤러가 소유하는 것이 �
 ## 번들 라이브러리 갱신
 
 ```bash
-cd Mermark/Resources
-curl -fsSL -o markdown-it.min.js "https://cdn.jsdelivr.net/npm/markdown-it@14.1.0/dist/markdown-it.min.js"
-curl -fsSL -o mermaid.min.js "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"
-curl -fsSL -o highlight.min.js "https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.11.1/build/highlight.min.js"
-curl -fsSL -o github.min.css "https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.11.1/build/styles/github.min.css"
-curl -fsSL -o github-dark.min.css "https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.11.1/build/styles/github-dark.min.css"
+./scripts/fetch-vendor.sh
 ```
 
-각 라이브러리의 라이선스는 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)를 참고하세요.
+버전은 스크립트 상단에서 바꿉니다. 각 라이브러리의 라이선스는
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)를 참고하세요.
+
+Xcode의 synchronized folder는 리소스를 번들 `Resources` 루트에 **평면으로** 복사합니다.
+그래서 KaTeX 폰트도 하위 폴더 없이 두고, 스크립트가 CSS의 `url(fonts/...)`에서 `fonts/`를
+지웁니다. 번들하지 않는 woff·ttf 대체 경로도 함께 제거합니다.
 
 ## 남은 작업
 
-- KaTeX 수식 (폰트 파일까지 번들해야 해서 아직 미포함)
 - 메뉴바 퀵 캡처와 전역 단축키
 - 에디터 마크다운 문법 강조
 

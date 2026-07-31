@@ -1,0 +1,11 @@
+# 내려받은 라이브러리는 원본 그대로 둔다.
+# 줄바꿈을 정규화하면 scripts/fetch-vendor.sh를 다시 돌릴 때마다 변경으로 잡힌다.
+Mermark/Resources/texmath.js       -text
+Mermark/Resources/*.min.js         -text
+Mermark/Resources/*.min.css        -text
+Mermark/Resources/KaTeX_*.woff2    binary
+
+# 통계에서 제외해 저장소 언어 표시가 왜곡되지 않게 한다
+Mermark/Resources/texmath.js       linguist-vendored
+Mermark/Resources/*.min.js         linguist-vendored
+Mermark/Resources/*.min.css        linguist-vendored

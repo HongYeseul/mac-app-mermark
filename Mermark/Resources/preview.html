@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <link rel="stylesheet" href="github.min.css" media="(prefers-color-scheme: light)">
 <link rel="stylesheet" href="github-dark.min.css" media="(prefers-color-scheme: dark)">
+<link rel="stylesheet" href="katex.min.css">
 <style>
   :root { color-scheme: light dark; }
   body {
@@ -48,6 +49,8 @@
 <script src="markdown-it.min.js"></script>
 <script src="highlight.min.js"></script>
 <script src="mermaid.min.js"></script>
+<script src="katex.min.js"></script>
+<script src="texmath.js"></script>
 </head>
 <body>
 <article id="content"></article>
@@ -69,6 +72,14 @@
   function escapeHtml(s) {
     return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   }
+
+  // 수식은 markdown-it 인라인 파싱보다 먼저 토큰으로 잡아야 "$x_1 + y_2$"의 밑줄이
+  // 기울임으로 바뀌지 않는다. texmath가 그 역할을 한다.
+  md.use(texmath, {
+    engine: katex,
+    delimiters: "dollars",
+    katexOptions: { throwOnError: false, errorColor: "#d00" },
+  });
 
   // 헤딩에 id를 붙여 "[링크](#섹션-이름)" 앵커가 동작하게 한다. GitHub과 같은 규칙.
   function slugify(text) {

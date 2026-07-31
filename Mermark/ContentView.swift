@@ -36,9 +36,18 @@ struct ContentView: View {
     var body: some View {
         NavigationSplitView {
             List(selection: selectionBinding) {
-                ForEach(store.filteredNotes) { note in
-                    Label(note.title, systemImage: "doc.text")
-                        .tag(note.url)
+                if !store.allTags.isEmpty {
+                    Section("태그") {
+                        ForEach(store.allTags, id: \.name) { tag in
+                            tagRow(tag)
+                        }
+                    }
+                }
+                Section("노트") {
+                    ForEach(store.filteredNotes) { note in
+                        Label(note.title, systemImage: "doc.text")
+                            .tag(note.url)
+                    }
                 }
             }
             .searchable(text: $store.searchQuery, placement: .sidebar, prompt: "제목·본문 검색")
@@ -85,6 +94,27 @@ struct ContentView: View {
                 .inspectorColumnWidth(min: 180, ideal: 240, max: 360)
         }
         .onAppear(perform: connectScrollSync)
+    }
+
+    /// 누르면 그 태그만 보고, 다시 누르면 전체로 돌아간다
+    private func tagRow(_ tag: (name: String, count: Int)) -> some View {
+        let isSelected = store.selectedTag?.caseInsensitiveCompare(tag.name) == .orderedSame
+        return Button {
+            store.toggleTag(tag.name)
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: isSelected ? "tag.fill" : "tag")
+                    .foregroundStyle(isSelected ? Color.accentColor : .secondary)
+                Text(tag.name)
+                    .foregroundStyle(isSelected ? Color.accentColor : .primary)
+                Spacer()
+                Text("\(tag.count)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     @ViewBuilder

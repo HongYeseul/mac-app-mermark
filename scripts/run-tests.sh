@@ -26,20 +26,29 @@ run_suite() {
 
 run_suite note-store \
     "$ROOT/Mermark/Notes/NoteStore.swift" \
+    "$ROOT/Mermark/Notes/MarkdownTags.swift" \
     "$ROOT/Tests/NoteStoreTests/main.swift"
+
+run_suite tags \
+    "$ROOT/Mermark/Notes/NoteStore.swift" \
+    "$ROOT/Mermark/Notes/MarkdownTags.swift" \
+    "$ROOT/Tests/TagTests/main.swift"
 
 run_suite quick-capture \
     "$ROOT/Mermark/Notes/NoteStore.swift" \
+    "$ROOT/Mermark/Notes/MarkdownTags.swift" \
     "$ROOT/Mermark/QuickCapture/GlobalHotKey.swift" \
     "$ROOT/Tests/QuickCaptureTests/main.swift"
 
 run_suite editor-scroll \
     "$ROOT/Mermark/Editor/LineMath.swift" \
+    "$ROOT/Mermark/Notes/MarkdownTags.swift" \
     "$ROOT/Mermark/Editor/MarkdownSyntax.swift" \
     "$ROOT/Mermark/Editor/EditorController.swift" \
     "$ROOT/Tests/EditorTests/main.swift"
 
 run_suite syntax-highlight \
+    "$ROOT/Mermark/Notes/MarkdownTags.swift" \
     "$ROOT/Mermark/Editor/MarkdownSyntax.swift" \
     "$ROOT/Mermark/Editor/LineMath.swift" \
     "$ROOT/Mermark/Editor/EditorController.swift" \

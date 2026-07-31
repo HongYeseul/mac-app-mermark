@@ -15,6 +15,7 @@ enum MarkdownSyntax {
             case blockquote
             case listMarker
             case thematicBreak
+            case tag
         }
 
         let kind: Kind
@@ -129,6 +130,9 @@ enum MarkdownSyntax {
         }
         for match in emphasis.matches(in: line, range: whole) where claim(match.range) {
             tokens.append(Token(kind: .emphasis, range: shift(match.range)))
+        }
+        for range in MarkdownTags.ranges(in: line) where claim(range) {
+            tokens.append(Token(kind: .tag, range: shift(range)))
         }
     }
 

@@ -19,6 +19,7 @@ final class NoteStore: ObservableObject {
     /// Cmd+N 직후 에디터로 포커스를 넘기기 위한 신호 (값이 바뀌면 에디터가 first responder가 됨)
     @Published private(set) var focusRequestID = 0
     @Published var searchQuery = ""
+    @Published var selectedTag: String?
     /// 메뉴에서 PDF 내보내기를 고르면 프리뷰 쪽에서 처리하도록 ContentView가 연결한다
     var onExportPDF: (() -> Void)?
 
@@ -33,6 +34,8 @@ final class NoteStore: ObservableObject {
     private var tracksFilename = false
     /// 본문 검색용 캐시. 수정일이 그대로면 파일을 다시 읽지 않는다.
     private var contentCache: [URL: (modifiedAt: Date, text: String)] = [:]
+    /// 태그도 같은 기준으로 캐시한다. 목록을 그릴 때마다 모든 노트를 다시 파싱하지 않기 위함.
+    private var tagCache: [URL: (modifiedAt: Date, tags: [String])] = [:]
 
     init() {
         if let path = UserDefaults.standard.string(forKey: folderPathKey),
@@ -101,16 +104,50 @@ final class NoteStore: ObservableObject {
 
         let alive = Set(notes.map(\.url))
         contentCache = contentCache.filter { alive.contains($0.key) }
+        tagCache = tagCache.filter { alive.contains($0.key) }
     }
 
-    /// 제목이 걸린 노트를 먼저, 본문만 걸린 노트를 뒤에 둔다. 대소문자와 자모 차이는 무시.
+    /// 노트 폴더 전체의 태그를 많이 쓰인 순으로
+    var allTags: [(name: String, count: Int)] {
+        var counts: [String: (name: String, count: Int)] = [:]
+        for note in notes {
+            for tag in tags(of: note) {
+                counts[tag.lowercased(), default: (tag, 0)].count += 1
+            }
+        }
+        return counts.values.sorted {
+            $0.count != $1.count ? $0.count > $1.count : $0.name < $1.name
+        }
+    }
+
+    func toggleTag(_ tag: String) {
+        selectedTag = (selectedTag?.caseInsensitiveCompare(tag) == .orderedSame) ? nil : tag
+    }
+
+    private func tags(of note: Note) -> [String] {
+        if let cached = tagCache[note.url], cached.modifiedAt == note.modifiedAt {
+            return cached.tags
+        }
+        let parsed = MarkdownTags.tags(in: content(of: note))
+        tagCache[note.url] = (note.modifiedAt, parsed)
+        return parsed
+    }
+
+    /// 태그를 고르면 먼저 걸러내고, 검색어는 제목이 걸린 노트를 앞에 둔다. 대소문자와 자모 차이는 무시.
     var filteredNotes: [Note] {
+        var candidates = notes
+        if let selectedTag {
+            candidates = candidates.filter { note in
+                tags(of: note).contains { $0.caseInsensitiveCompare(selectedTag) == .orderedSame }
+            }
+        }
+
         let query = searchQuery.trimmingCharacters(in: .whitespaces)
-        guard !query.isEmpty else { return notes }
+        guard !query.isEmpty else { return candidates }
 
         var titleMatches: [Note] = []
         var bodyMatches: [Note] = []
-        for note in notes {
+        for note in candidates {
             if note.title.localizedStandardContains(query) {
                 titleMatches.append(note)
             } else if content(of: note).localizedStandardContains(query) {

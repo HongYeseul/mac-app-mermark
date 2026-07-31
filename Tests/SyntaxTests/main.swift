@@ -26,7 +26,9 @@ check("헤딩 레벨 인식",
       "\(kinds(headings))")
 check("7개 이상은 헤딩 아님", kinds(headings).count == 3, "\(kinds(headings))")
 check("헤딩 토큰은 줄 전체", slices(headings).first == "# 제목 1", "\(slices(headings).first ?? "nil")")
-check("# 뒤 공백 없으면 헤딩 아님", tokens("#태그").isEmpty, "\(kinds("#태그"))")
+// "#태그"는 헤딩이 아니라 태그로 잡힌다
+check("# 뒤 공백 없으면 헤딩 아님", kinds("#태그") == [.tag], "\(kinds("#태그"))")
+check("태그 토큰은 # 포함", slices("본문 #정산 끝") == ["#정산"], "\(slices("본문 #정산 끝"))")
 
 check("인용문", kinds("> 인용된 문장") == [.blockquote])
 check("수평선", kinds("---") == [.thematicBreak], "\(kinds("---"))")

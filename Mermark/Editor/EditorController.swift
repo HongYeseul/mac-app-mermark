@@ -141,6 +141,8 @@ final class EditorController: NSObject, ObservableObject, NSTextViewDelegate {
             return [.foregroundColor: NSColor.systemOrange]
         case .thematicBreak:
             return [.foregroundColor: NSColor.tertiaryLabelColor]
+        case .tag:
+            return [.foregroundColor: NSColor.systemPurple]
         }
     }
 }

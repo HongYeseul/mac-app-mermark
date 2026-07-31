@@ -12,6 +12,11 @@ final class EditorController: NSObject, ObservableObject, NSTextViewDelegate {
     private var suppressReportUntil = Date.distantPast
     private var lastReportedLine = -1
     private var lastFocusRequestID = 0
+    private var highlightWorkItem: DispatchWorkItem?
+
+    private static let baseFont = NSFont.monospacedSystemFont(ofSize: 14, weight: .regular)
+    private static let boldFont = NSFont.monospacedSystemFont(ofSize: 14, weight: .bold)
+    private static let italicFont = NSFontManager.shared.convert(baseFont, toHaveTrait: .italicFontMask)
 
     override init() {
         scrollView = NSTextView.scrollableTextView()
@@ -19,7 +24,7 @@ final class EditorController: NSObject, ObservableObject, NSTextViewDelegate {
         super.init()
 
         textView.delegate = self
-        textView.font = .monospacedSystemFont(ofSize: 14, weight: .regular)
+        textView.font = Self.baseFont
         textView.isRichText = false
         textView.allowsUndo = true
         textView.isAutomaticQuoteSubstitutionEnabled = false
@@ -43,6 +48,7 @@ final class EditorController: NSObject, ObservableObject, NSTextViewDelegate {
         guard textView.string != text else { return }
         textView.string = text
         lastReportedLine = -1
+        highlightNow()
     }
 
     func focus(requestID: Int) {
@@ -85,5 +91,56 @@ final class EditorController: NSObject, ObservableObject, NSTextViewDelegate {
 
     func textDidChange(_ notification: Notification) {
         onTextChange?(textView.string)
+        scheduleHighlight()
+    }
+
+    // MARK: - 문법 강조
+
+    /// 타이핑 중 매 글자마다 문서 전체를 다시 칠하지 않도록 짧게 모은다
+    private func scheduleHighlight() {
+        highlightWorkItem?.cancel()
+        let workItem = DispatchWorkItem { [weak self] in self?.highlightNow() }
+        highlightWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12, execute: workItem)
+    }
+
+    private func highlightNow() {
+        guard let storage = textView.textStorage else { return }
+        let fullRange = NSRange(location: 0, length: (textView.string as NSString).length)
+
+        storage.beginEditing()
+        storage.setAttributes([.font: Self.baseFont, .foregroundColor: NSColor.textColor], range: fullRange)
+        for token in MarkdownSyntax.tokens(in: textView.string) {
+            storage.addAttributes(Self.attributes(for: token.kind), range: token.range)
+        }
+        storage.endEditing()
+
+        // 강조된 구간 뒤에서 입력을 이어가도 서식이 번지지 않게 한다
+        textView.typingAttributes = [.font: Self.baseFont, .foregroundColor: NSColor.textColor]
+    }
+
+    private static func attributes(for kind: MarkdownSyntax.Token.Kind) -> [NSAttributedString.Key: Any] {
+        switch kind {
+        case .heading(let level):
+            let size = max(14, 22 - CGFloat(level) * 2)
+            return [.font: NSFont.monospacedSystemFont(ofSize: size, weight: .bold),
+                    .foregroundColor: NSColor.textColor]
+        case .codeBlock, .inlineCode:
+            return [.foregroundColor: NSColor.systemTeal]
+        case .strong:
+            return [.font: boldFont]
+        case .emphasis:
+            return [.font: italicFont]
+        case .linkText:
+            return [.foregroundColor: NSColor.linkColor]
+        case .linkURL:
+            return [.foregroundColor: NSColor.secondaryLabelColor]
+        case .blockquote:
+            return [.foregroundColor: NSColor.secondaryLabelColor]
+        case .listMarker:
+            return [.foregroundColor: NSColor.systemOrange]
+        case .thematicBreak:
+            return [.foregroundColor: NSColor.tertiaryLabelColor]
+        }
     }
 }

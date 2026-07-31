@@ -14,7 +14,7 @@ run_suite() {
     shift
     echo "▶ $name"
     if ! swiftc -o "$BUILD_DIR/$name" "$@"; then
-        echo "✗ $name: 컴파일 실패"
+        echo "FAILURES: $name 컴파일 실패"
         failed=1
         return
     fi
@@ -30,8 +30,15 @@ run_suite note-store \
 
 run_suite editor-scroll \
     "$ROOT/Mermark/Editor/LineMath.swift" \
+    "$ROOT/Mermark/Editor/MarkdownSyntax.swift" \
     "$ROOT/Mermark/Editor/EditorController.swift" \
     "$ROOT/Tests/EditorTests/main.swift"
+
+run_suite syntax-highlight \
+    "$ROOT/Mermark/Editor/MarkdownSyntax.swift" \
+    "$ROOT/Mermark/Editor/LineMath.swift" \
+    "$ROOT/Mermark/Editor/EditorController.swift" \
+    "$ROOT/Tests/SyntaxTests/main.swift"
 
 run_suite outline \
     "$ROOT/Mermark/Editor/MarkdownOutline.swift" \

@@ -19,6 +19,7 @@ Mermaid 다이어그램을 **바로 이미지로 뽑아 쓰는** macOS 마크다
 - **메모장처럼 빠른 작성** — `⌘N`으로 제목 입력 없이 바로 타이핑, 저장 버튼 없는 자동 저장,
   첫 줄이 곧 파일명
 - **뷰어 / 에디터 / 분할** — `⌘1` `⌘2` `⌘3`으로 즉시 전환. 분할 모드에서는 양쪽 스크롤이 줄 단위로 연동
+- **문법 강조** — 에디터에서 제목·강조·코드·링크·목록을 색과 굵기로 구분
 - **제목·본문 검색** — 사이드바 검색창으로 노트 폴더 전체를 훑습니다. 제목이 걸린 노트가 먼저 나옵니다
 - **목차** — `⌘⌥T`로 문서의 헤딩 목록을 열고, 항목을 누르면 그 위치로 이동
 - **로컬 이미지** — `![](./img.png)`처럼 노트 기준 상대경로나 `/`로 시작하는 노트 폴더 최상위 기준 경로 모두 표시
@@ -126,6 +127,7 @@ Mermaid 블록처럼 "원본 6줄 = 화면 300px"인 구간에서도 어긋나�
 |---|---|
 | `note-store` | 실파일·실 FSEvents 기반 노트 폴더 동작과 검색 40 케이스 |
 | `editor-scroll` | 실제 `NSTextView`로 줄 ↔ 스크롤 왕복 13 케이스 |
+| `syntax-highlight` | 문법 토큰 범위와 실제 `NSTextStorage` 속성 적용 31 케이스 |
 | `outline` | 코드 펜스·`C#`·프론트매터를 가려내는 목차 추출 18 케이스 |
 | `mermaid-blocks` | 펜스 길이·정보 문자열·미닫힘을 다루는 블록 추출 18 케이스 |
 | `export-options` | 실제 렌더·스냅샷으로 해상도·배경·테마 반영 17 케이스 |
@@ -146,11 +148,12 @@ Mermark/
 ├── ContentView.swift         3분할 레이아웃, 모드 전환, 목차, 스크롤 동기화 배선
 ├── SettingsView.swift        내보내기 옵션 (⌘,)
 ├── Notes/
-│   └── NoteStore.swift      노트 폴더·노트 목록·자동 저장·파일명 동기화·FSEvents
+│   └── NoteStore.swift       노트 폴더·노트 목록·자동 저장·파일명 동기화·FSEvents
 ├── Editor/
 │   ├── EditorController.swift  NSTextView 소유, 스크롤 보고/이동
 │   ├── LineMath.swift          문자 인덱스 ↔ 줄 번호 변환
 │   ├── MarkdownOutline.swift   목차(헤딩) 추출
+│   ├── MarkdownSyntax.swift    문법 강조용 토큰 범위 계산
 │   └── MarkdownEditor.swift    SwiftUI 래퍼
 ├── Preview/
 │   ├── PreviewController.swift WKWebView 소유, 렌더 디바운스, 메시지 처리
@@ -185,8 +188,9 @@ Xcode의 synchronized folder는 리소스를 번들 `Resources` 루트에 **평�
 
 ## 남은 작업
 
+- 문서 전체 PDF 내보내기, 프론트매터 표시
 - 메뉴바 퀵 캡처와 전역 단축키
-- 에디터 마크다운 문법 강조
+- 태그
 
 ## 알려진 제약
 

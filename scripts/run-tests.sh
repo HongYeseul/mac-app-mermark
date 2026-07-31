@@ -52,6 +52,10 @@ run_suite batch-export \
     "$ROOT/Mermark/Preview/MermaidExporter.swift" \
     "$ROOT/Tests/BatchExportTests/main.swift"
 
+run_suite image-resources \
+    "$ROOT/Mermark/Preview/LocalResourceHandler.swift" \
+    "$ROOT/Tests/ImageResourceTests/main.swift"
+
 run_suite view-mode \
     "$ROOT/Tests/ViewModeTests/main.swift"
 

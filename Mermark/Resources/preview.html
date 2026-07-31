@@ -109,8 +109,23 @@
     window.webkit?.messageHandlers?.mermaidExport?.postMessage({ action, code });
   };
 
+  // 노트 기준 상대경로 이미지는 앱이 서빙하는 전용 스킴으로 바꾼다.
+  // "/"로 시작하면 노트 폴더 최상위 기준, 아니면 노트가 든 폴더 기준.
+  function resolveLocalImages() {
+    for (const img of document.querySelectorAll("#content img")) {
+      const src = img.getAttribute("src");
+      if (!src) continue;
+      // 이미 스킴이 붙었거나 //로 시작하는 절대 주소는 그대로 둔다
+      if (/^[a-z][a-z0-9+.-]*:/i.test(src) || src.startsWith("//")) continue;
+      // markdown-it이 이미 퍼센트 인코딩해 둔 값이므로 다시 인코딩하면 "%"가 "%25"가 된다
+      const host = src.startsWith("/") ? "folder" : "note";
+      img.setAttribute("src", "mermark-local://" + host + "/" + src.replace(/^\/+/, ""));
+    }
+  }
+
   window.renderMarkdown = async (markdown) => {
     document.getElementById("content").innerHTML = md.render(markdown);
+    resolveLocalImages();
     lastReportedLine = -1;
     try {
       await mermaid.run({ nodes: document.querySelectorAll("pre.mermaid") });

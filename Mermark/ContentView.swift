@@ -105,8 +105,13 @@ struct ContentView: View {
                         .frame(minWidth: 300)
                 }
                 if mode != .editor {
-                    MarkdownPreview(controller: preview, markdown: store.currentText)
-                        .frame(minWidth: 300)
+                    MarkdownPreview(
+                        controller: preview,
+                        markdown: store.currentText,
+                        noteURL: store.selectedNoteURL,
+                        folderURL: store.folderURL
+                    )
+                    .frame(minWidth: 300)
                 }
             }
         }

@@ -13,8 +13,15 @@ final class PreviewController: NSObject, ObservableObject, WKNavigationDelegate,
     private var renderWorkItem: DispatchWorkItem?
     private var pendingScrollLine: Int?
 
+    private let resourceHandler: LocalResourceHandler
+
     override init() {
+        // super.init() 전에는 self를 읽을 수 없어 지역 변수로 만든 뒤 저장한다
+        let handler = LocalResourceHandler()
+        resourceHandler = handler
+
         let configuration = WKWebViewConfiguration()
+        configuration.setURLSchemeHandler(handler, forURLScheme: LocalResourceHandler.scheme)
         webView = WKWebView(frame: .zero, configuration: configuration)
         super.init()
 
@@ -25,6 +32,12 @@ final class PreviewController: NSObject, ObservableObject, WKNavigationDelegate,
         if let url = Bundle.main.url(forResource: "preview", withExtension: "html") {
             webView.loadFileURL(url, allowingReadAccessTo: url.deletingLastPathComponent())
         }
+    }
+
+    /// 상대경로 이미지를 노트 위치 기준으로 풀 수 있게 현재 노트와 노트 폴더를 알려준다
+    func setLocation(noteURL: URL?, folderURL: URL?) {
+        resourceHandler.noteDirectory = noteURL?.deletingLastPathComponent()
+        resourceHandler.rootDirectory = folderURL
     }
 
     // mermaid 재렌더 비용이 있어 타이핑 중에는 디바운스

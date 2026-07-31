@@ -18,6 +18,11 @@ struct MermarkApp: App {
                 Button("노트 폴더 열기…") { store.chooseFolder() }
                     .keyboardShortcut("o", modifiers: .command)
             }
+            CommandGroup(after: .saveItem) {
+                Button("모든 다이어그램 내보내기…") { exportAllDiagrams() }
+                    .keyboardShortcut("e", modifiers: [.command, .shift])
+                    .disabled(store.selectedNoteURL == nil)
+            }
             CommandMenu("보기") {
                 Button("뷰어") { mode = .viewer }
                     .keyboardShortcut("1", modifiers: .command)
@@ -30,5 +35,17 @@ struct MermarkApp: App {
                     .keyboardShortcut("t", modifiers: [.command, .option])
             }
         }
+
+        Settings {
+            SettingsView()
+        }
+    }
+
+    private func exportAllDiagrams() {
+        let baseName = store.selectedNoteURL?.deletingPathExtension().lastPathComponent ?? "diagram"
+        MermaidExporter.shared.exportAll(
+            codes: MermaidBlocks.extract(from: store.currentText),
+            baseName: baseName
+        )
     }
 }

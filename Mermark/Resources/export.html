@@ -11,12 +11,18 @@
 <body>
 <div id="container"></div>
 <script>
-  mermaid.initialize({ startOnLoad: false, theme: "default" });
-
   let seq = 0;
+
+  function applyBackground(background) {
+    document.documentElement.style.background = background;
+    document.body.style.background = background;
+  }
+
   // mermaid 렌더 후 SVG 자연 크기(px)를 반환. Swift가 이 크기로 WebView를 리사이즈한 뒤 스냅샷을 찍는다.
   // 크기는 getBoundingClientRect가 아니라 viewBox에서 읽는다 — rect는 컨테이너 레이아웃에 따라 축소될 수 있음.
-  window.renderForExport = async (code) => {
+  window.renderForExport = async (code, theme, background) => {
+    mermaid.initialize({ startOnLoad: false, theme: theme });
+    applyBackground(background);
     const { svg } = await mermaid.render("export-" + (++seq), code);
     const container = document.getElementById("container");
     container.innerHTML = svg;
@@ -32,9 +38,14 @@
 
   // SVG 파일용 렌더. htmlLabels:false로 라벨을 foreignObject(HTML) 대신 순수 SVG <text>로 뽑아
   // 다른 앱(피그마·일러스트레이터 등)에서 열어도 안 깨지게 한다. (PLAN.md 3-a 주의 2)
-  window.renderForExportSVG = async (code) => {
-    // 주의: flowchart.htmlLabels만으로는 무시됨 — 최상위 htmlLabels까지 함께 꺼야 적용된다 (mermaid v11)
-    mermaid.initialize({ startOnLoad: false, theme: "default", htmlLabels: false, flowchart: { htmlLabels: false } });
+  // 주의: flowchart.htmlLabels만으로는 무시됨 — 최상위 htmlLabels까지 함께 꺼야 적용된다 (mermaid v11)
+  window.renderForExportSVG = async (code, theme) => {
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: theme,
+      htmlLabels: false,
+      flowchart: { htmlLabels: false },
+    });
     try {
       const { svg } = await mermaid.render("export-" + (++seq), code);
       return svg;

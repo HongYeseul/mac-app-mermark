@@ -9,16 +9,25 @@ final class MermaidExporter: NSObject, WKNavigationDelegate {
     enum Destination {
         case savePanel
         case clipboard
+        case file(URL)
     }
 
     private enum Kind {
-        case png(scale: CGFloat, destination: Destination)
+        case png(destination: Destination)
         case svgSave
     }
 
     private struct Job {
         let code: String
         let kind: Kind
+        let options: ExportOptions
+    }
+
+    /// 일괄 내보내기 진행 상태. 파일마다 알림을 띄우지 않고 끝에 한 번만 요약한다.
+    private struct Batch {
+        var written: [URL] = []
+        var failures = 0
+        let completion: (_ written: [URL], _ failures: Int) -> Void
     }
 
     private let webView: WKWebView
@@ -26,9 +35,12 @@ final class MermaidExporter: NSObject, WKNavigationDelegate {
     private var isPageReady = false
     private var isExporting = false
     private var pendingJobs: [Job] = []
+    private var batch: Batch?
 
     // 렌더 측정 전에는 충분히 큰 프레임이어야 SVG가 자연 크기로 배치된다
     private static let stagingSize = NSSize(width: 2000, height: 2000)
+    /// 아주 긴 다이어그램에서 스냅샷이 과도하게 커지는 것을 막는다
+    private static let maxPixelDimension: Double = 8192
 
     private override init() {
         let initialFrame = NSRect(origin: .zero, size: Self.stagingSize)
@@ -42,18 +54,72 @@ final class MermaidExporter: NSObject, WKNavigationDelegate {
         hostWindow.contentView = webView
         hostWindow.isReleasedWhenClosed = false
 
-        if let url = Bundle.main.url(forResource: "export", withExtension: "html") {
-            webView.loadFileURL(url, allowingReadAccessTo: url.deletingLastPathComponent())
+        if let resources = Self.resourcesURL {
+            webView.loadFileURL(resources.appendingPathComponent("export.html"), allowingReadAccessTo: resources)
         }
     }
 
-    func exportPNG(code: String, scale: CGFloat = 2, destination: Destination) {
-        pendingJobs.append(Job(code: code, kind: .png(scale: scale, destination: destination)))
-        processNextJobIfPossible()
+    /// 기본값은 앱 번들. 검증 하네스가 소스 트리의 Resources를 가리키도록 바꿔 쓴다.
+    static var resourcesURL: URL? = Bundle.main.resourceURL
+
+    // MARK: - 공개 API
+
+    func exportPNG(code: String, destination: Destination) {
+        enqueue(Job(code: code, kind: .png(destination: destination), options: .current))
     }
 
     func exportSVG(code: String) {
-        pendingJobs.append(Job(code: code, kind: .svgSave))
+        enqueue(Job(code: code, kind: .svgSave, options: .current))
+    }
+
+    /// 문서 안의 모든 다이어그램을 `문서명-1.png` 형태로 한 폴더에 저장한다.
+    func exportAll(codes: [String], baseName: String) {
+        guard !codes.isEmpty else {
+            showAlert(title: "내보낼 다이어그램이 없습니다", message: "이 문서에는 mermaid 블록이 없습니다.")
+            return
+        }
+
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.canCreateDirectories = true
+        panel.prompt = "이 폴더에 저장"
+        panel.message = "다이어그램 \(codes.count)개를 저장할 폴더를 선택하세요"
+        guard panel.runModal() == .OK, let directory = panel.url else { return }
+
+        exportAll(codes: codes, baseName: baseName, to: directory) { [weak self] written, failures in
+            guard let self else { return }
+            guard !written.isEmpty else {
+                self.showAlert(title: "내보내기 실패", message: "다이어그램을 저장하지 못했습니다.")
+                return
+            }
+            let message = failures == 0
+                ? "다이어그램 \(written.count)개를 저장했습니다."
+                : "다이어그램 \(written.count)개를 저장했고 \(failures)개는 실패했습니다."
+            self.showAlert(title: "일괄 내보내기 완료", message: message)
+            NSWorkspace.shared.activateFileViewerSelecting(written)
+        }
+    }
+
+    /// 폴더 선택 없이 바로 저장한다. 파일명은 `문서명-1.png`, `문서명-2.png` 순.
+    func exportAll(codes: [String], baseName: String, to directory: URL,
+                   completion: @escaping (_ written: [URL], _ failures: Int) -> Void) {
+        guard !codes.isEmpty else {
+            completion([], 0)
+            return
+        }
+        batch = Batch(completion: completion)
+        let options = ExportOptions.current
+        for (index, code) in codes.enumerated() {
+            let url = directory.appendingPathComponent("\(baseName)-\(index + 1).png")
+            enqueue(Job(code: code, kind: .png(destination: .file(url)), options: options))
+        }
+    }
+
+    // MARK: - 작업 큐
+
+    private func enqueue(_ job: Job) {
+        pendingJobs.append(job)
         processNextJobIfPossible()
     }
 
@@ -63,7 +129,11 @@ final class MermaidExporter: NSObject, WKNavigationDelegate {
     }
 
     private func processNextJobIfPossible() {
-        guard isPageReady, !isExporting, !pendingJobs.isEmpty else { return }
+        guard isPageReady, !isExporting else { return }
+        guard !pendingJobs.isEmpty else {
+            finalizeBatchIfNeeded()
+            return
+        }
         isExporting = true
         let job = pendingJobs.removeFirst()
 
@@ -75,11 +145,23 @@ final class MermaidExporter: NSObject, WKNavigationDelegate {
         }
     }
 
+    private func isDarkTheme(_ options: ExportOptions) -> Bool {
+        let systemIsDark = NSApp.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        return options.theme.mermaidTheme(systemIsDark: systemIsDark) == "dark"
+    }
+
+    // MARK: - PNG
+
     private func renderPNG(job: Job) {
         hostWindow.setContentSize(Self.stagingSize)
+        let dark = isDarkTheme(job.options)
         webView.callAsyncJavaScript(
-            "return await window.renderForExport(code);",
-            arguments: ["code": job.code],
+            "return await window.renderForExport(code, theme, background);",
+            arguments: [
+                "code": job.code,
+                "theme": dark ? "dark" : "default",
+                "background": job.options.background.cssValue(isDarkTheme: dark),
+            ],
             in: nil,
             in: .page
         ) { [weak self] result in
@@ -98,49 +180,17 @@ final class MermaidExporter: NSObject, WKNavigationDelegate {
         }
     }
 
-    private func renderSVG(job: Job) {
-        webView.callAsyncJavaScript(
-            "return await window.renderForExportSVG(code);",
-            arguments: ["code": job.code],
-            in: nil,
-            in: .page
-        ) { [weak self] result in
-            switch result {
-            case .success(let value):
-                guard let svg = value as? String else {
-                    self?.finishJob(error: "SVG 렌더 결과를 읽지 못했습니다")
-                    return
-                }
-                self?.deliverSVG(svg)
-            case .failure(let error):
-                self?.finishJob(error: "Mermaid 렌더 실패: \(error.localizedDescription)")
-            }
-        }
-    }
-
-    private func deliverSVG(_ svg: String) {
-        let panel = NSSavePanel()
-        panel.allowedContentTypes = [.svg]
-        panel.nameFieldStringValue = "diagram.svg"
-        panel.begin { response in
-            if response == .OK, let url = panel.url {
-                let content = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" + svg
-                do {
-                    try content.write(to: url, atomically: true, encoding: .utf8)
-                } catch {
-                    self.showError("저장 실패: \(error.localizedDescription)")
-                }
-            }
-            self.finishJob(error: nil)
-        }
-    }
-
     private func snapshot(job: Job, width: Double, height: Double) {
-        guard case .png(let scale, let destination) = job.kind else {
+        guard case .png(let destination) = job.kind else {
             finishJob(error: "잘못된 작업 종류")
             return
         }
         hostWindow.setContentSize(NSSize(width: width, height: height))
+
+        // 요청 배율이 픽셀 상한을 넘으면 상한에 맞춰 자동으로 낮춘다
+        let requested = Double(job.options.scale)
+        let limit = Self.maxPixelDimension / max(width, height)
+        let scale = max(1, min(requested, limit))
 
         // 리사이즈가 웹 프로세스 레이아웃에 반영될 시간을 준 뒤 스냅샷
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
@@ -176,6 +226,17 @@ final class MermaidExporter: NSObject, WKNavigationDelegate {
             pasteboard.setData(png, forType: .png)
             pasteboard.setData(tiff, forType: .tiff)
             finishJob(error: nil)
+
+        case .file(let url):
+            do {
+                try png.write(to: url)
+                batch?.written.append(url)
+                finishJob(error: nil)
+            } catch {
+                batch?.failures += 1
+                finishJob(error: batch == nil ? "저장 실패: \(error.localizedDescription)" : nil)
+            }
+
         case .savePanel:
             let panel = NSSavePanel()
             panel.allowedContentTypes = [.png]
@@ -185,7 +246,7 @@ final class MermaidExporter: NSObject, WKNavigationDelegate {
                     do {
                         try png.write(to: url)
                     } catch {
-                        self.showError("저장 실패: \(error.localizedDescription)")
+                        self.showAlert(title: "Mermaid 내보내기 오류", message: "저장 실패: \(error.localizedDescription)")
                     }
                 }
                 self.finishJob(error: nil)
@@ -193,15 +254,65 @@ final class MermaidExporter: NSObject, WKNavigationDelegate {
         }
     }
 
+    // MARK: - SVG
+
+    private func renderSVG(job: Job) {
+        webView.callAsyncJavaScript(
+            "return await window.renderForExportSVG(code, theme);",
+            arguments: [
+                "code": job.code,
+                "theme": isDarkTheme(job.options) ? "dark" : "default",
+            ],
+            in: nil,
+            in: .page
+        ) { [weak self] result in
+            switch result {
+            case .success(let value):
+                guard let svg = value as? String else {
+                    self?.finishJob(error: "SVG 렌더 결과를 읽지 못했습니다")
+                    return
+                }
+                self?.deliverSVG(svg)
+            case .failure(let error):
+                self?.finishJob(error: "Mermaid 렌더 실패: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    private func deliverSVG(_ svg: String) {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.svg]
+        panel.nameFieldStringValue = "diagram.svg"
+        panel.begin { response in
+            if response == .OK, let url = panel.url {
+                let content = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" + svg
+                do {
+                    try content.write(to: url, atomically: true, encoding: .utf8)
+                } catch {
+                    self.showAlert(title: "Mermaid 내보내기 오류", message: "저장 실패: \(error.localizedDescription)")
+                }
+            }
+            self.finishJob(error: nil)
+        }
+    }
+
+    // MARK: - 마무리
+
     private func finishJob(error: String?) {
-        if let error { showError(error) }
+        if let error { showAlert(title: "Mermaid 내보내기 오류", message: error) }
         isExporting = false
         processNextJobIfPossible()
     }
 
-    private func showError(_ message: String) {
+    private func finalizeBatchIfNeeded() {
+        guard let batch else { return }
+        self.batch = nil
+        batch.completion(batch.written, batch.failures)
+    }
+
+    private func showAlert(title: String, message: String) {
         let alert = NSAlert()
-        alert.messageText = "Mermaid 내보내기 오류"
+        alert.messageText = title
         alert.informativeText = message
         alert.runModal()
     }

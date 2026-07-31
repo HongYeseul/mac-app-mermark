@@ -37,6 +37,21 @@ run_suite outline \
     "$ROOT/Mermark/Editor/MarkdownOutline.swift" \
     "$ROOT/Tests/OutlineTests/main.swift"
 
+run_suite mermaid-blocks \
+    "$ROOT/Mermark/Preview/MermaidBlocks.swift" \
+    "$ROOT/Tests/MermaidBlocksTests/main.swift"
+
+export MERMARK_RESOURCES="$ROOT/Mermark/Resources"
+run_suite export-options \
+    "$ROOT/Mermark/Preview/ExportOptions.swift" \
+    "$ROOT/Tests/ExportTests/main.swift"
+
+run_suite batch-export \
+    "$ROOT/Mermark/Preview/ExportOptions.swift" \
+    "$ROOT/Mermark/Preview/MermaidBlocks.swift" \
+    "$ROOT/Mermark/Preview/MermaidExporter.swift" \
+    "$ROOT/Tests/BatchExportTests/main.swift"
+
 run_suite view-mode \
     "$ROOT/Tests/ViewModeTests/main.swift"
 

@@ -11,7 +11,9 @@ Mermaid 다이어그램을 **바로 이미지로 뽑아 쓰는** macOS 마크다
 
 ## 무엇을 하는 앱인가
 
-- **Mermaid 이미지 내보내기** — 고해상도 PNG(2x)를 파일로 저장하거나 클립보드로 복사, SVG로 저장
+- **Mermaid 이미지 내보내기** — 고해상도 PNG를 파일로 저장하거나 클립보드로 복사, SVG로 저장.
+  해상도(1x/2x/3x)·테마·배경은 설정(`⌘,`)에서 고릅니다
+- **일괄 내보내기** — `⌘⇧E`로 문서 안의 모든 다이어그램을 `문서명-1.png`부터 순서대로 한 폴더에 저장
 - **평범한 `.md` 파일** — 특정 폴더를 노트 폴더로 지정해 열고 저장합니다. 독자 포맷도 락인도 없어
   다른 마크다운 앱과 같은 파일을 그대로 함께 씁니다
 - **메모장처럼 빠른 작성** — `⌘N`으로 제목 입력 없이 바로 타이핑, 저장 버튼 없는 자동 저장,
@@ -52,6 +54,8 @@ Xcode에서 `Mermark.xcodeproj`를 열고 Run 해도 됩니다.
 | `⌘O` | 노트 폴더 선택 |
 | `⌘1` / `⌘2` / `⌘3` | 뷰어 / 에디터 / 분할 모드 |
 | `⌘⌥T` | 목차 패널 열기/닫기 |
+| `⌘⇧E` | 문서 안 모든 다이어그램을 한 폴더에 내보내기 |
+| `⌘,` | 내보내기 설정 (해상도 · 테마 · 배경) |
 | 사이드바 검색창 | 제목과 본문을 함께 검색 |
 | Mermaid 블록에 마우스 올리기 | `PNG 복사 · PNG 저장 · SVG 저장` 툴바 |
 
@@ -110,6 +114,9 @@ Mermaid 블록처럼 "원본 6줄 = 화면 300px"인 구간에서도 어긋나�
 | `note-store` | 실파일·실 FSEvents 기반 노트 폴더 동작과 검색 40 케이스 |
 | `editor-scroll` | 실제 `NSTextView`로 줄 ↔ 스크롤 왕복 13 케이스 |
 | `outline` | 코드 펜스·`C#`·프론트매터를 가려내는 목차 추출 18 케이스 |
+| `mermaid-blocks` | 펜스 길이·정보 문자열·미닫힘을 다루는 블록 추출 18 케이스 |
+| `export-options` | 실제 렌더·스냅샷으로 해상도·배경·테마 반영 17 케이스 |
+| `batch-export` | 실제 `MermaidExporter`로 일괄 내보내기 파일 생성 10 케이스 |
 | `view-mode` | 실제 `NSHostingView`로 모드 전환 시 상태 보존 12 케이스 |
 
 프리뷰의 `data-line` 앵커와 양방향 스크롤은 브라우저에서 `Mermark/Resources/preview.html`을
@@ -119,17 +126,21 @@ Mermaid 블록처럼 "원본 6줄 = 화면 300px"인 구간에서도 어긋나�
 
 ```
 Mermark/
-├── MermarkApp.swift          앱 진입점, 메뉴 명령(⌘N/⌘O/⌘1~3)
-├── ContentView.swift         3분할 레이아웃, 모드 전환, 스크롤 동기화 배선
+├── MermarkApp.swift          앱 진입점, 메뉴 명령, 설정 창
+├── ContentView.swift         3분할 레이아웃, 모드 전환, 목차, 스크롤 동기화 배선
+├── SettingsView.swift        내보내기 옵션 (⌘,)
 ├── Notes/
 │   └── NoteStore.swift      노트 폴더·노트 목록·자동 저장·파일명 동기화·FSEvents
 ├── Editor/
 │   ├── EditorController.swift  NSTextView 소유, 스크롤 보고/이동
 │   ├── LineMath.swift          문자 인덱스 ↔ 줄 번호 변환
+│   ├── MarkdownOutline.swift   목차(헤딩) 추출
 │   └── MarkdownEditor.swift    SwiftUI 래퍼
 ├── Preview/
 │   ├── PreviewController.swift WKWebView 소유, 렌더 디바운스, 메시지 처리
-│   ├── MermaidExporter.swift   오프스크린 스냅샷 기반 PNG/SVG 내보내기
+│   ├── MermaidExporter.swift   오프스크린 스냅샷 기반 PNG/SVG 내보내기, 일괄 저장
+│   ├── MermaidBlocks.swift     본문에서 mermaid 펜스 추출
+│   ├── ExportOptions.swift     해상도·테마·배경 옵션
 │   └── MarkdownPreview.swift   SwiftUI 래퍼
 └── Resources/
     ├── preview.html          프리뷰 템플릿 (data-line, 호버 툴바, 스크롤 API)
@@ -155,8 +166,6 @@ curl -fsSL -o github-dark.min.css "https://cdn.jsdelivr.net/gh/highlightjs/cdn-r
 
 ## 남은 작업
 
-- 내보내기 옵션 UI (스케일 1x/2x/3x, 배경 투명/흰색, 라이트/다크 테마)
-- 문서 안 모든 다이어그램 일괄 내보내기
 - KaTeX 수식 (폰트 파일까지 번들해야 해서 아직 미포함)
 - 메뉴바 퀵 캡처와 전역 단축키
 - 에디터 마크다운 문법 강조
@@ -165,7 +174,8 @@ curl -fsSL -o github-dark.min.css "https://cdn.jsdelivr.net/gh/highlightjs/cdn-r
 
 - 노트 기준 상대경로 이미지(`![](./img.png)`)는 아직 표시되지 않습니다. 프리뷰 HTML이 앱 번들에서
   로드되기 때문이며, 커스텀 URL 스킴 핸들러로 노트 폴더 파일을 서빙하는 방식으로 해결할 예정입니다
-- 세로로 아주 긴 다이어그램은 스냅샷 크기 상한 처리가 아직 없습니다
+- 세로로 아주 긴 다이어그램은 픽셀 상한(8192px)에 맞춰 해상도가 자동으로 낮아집니다.
+  설정한 배율보다 작게 나올 수 있습니다
 - 목차는 `#` 방식(ATX) 헤딩만 인식합니다. 밑줄(setext) 방식은 아직 지원하지 않습니다
 - 앱 서명을 하지 않으므로 다른 Mac으로 옮기면 Gatekeeper 경고가 납니다
 

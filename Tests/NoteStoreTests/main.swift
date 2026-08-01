@@ -275,6 +275,69 @@ pump(0.2)
 check("폴더가 없으면 경로도 없음", noFolderStore.folderDisplayPath == nil,
       noFolderStore.folderDisplayPath ?? "nil")
 
+// MARK: - I. 최근 폴더
+
+print("\n── I. 최근 폴더")
+UserDefaults.standard.removeObject(forKey: "recentFolderPaths")
+UserDefaults.standard.removeObject(forKey: "notesFolderPath")
+
+let folderA = rootDir.appendingPathComponent("폴더A")
+let folderB = rootDir.appendingPathComponent("폴더B")
+let folderC = rootDir.appendingPathComponent("폴더C")
+for folder in [folderA, folderB, folderC] {
+    try! fm.createDirectory(at: folder, withIntermediateDirectories: true)
+    try! "# 노트".write(to: folder.appendingPathComponent("노트.md"), atomically: true, encoding: .utf8)
+}
+
+UserDefaults.standard.set(folderA.path, forKey: "notesFolderPath")
+let recentStore = NoteStore()
+pump(0.4)
+check("연 폴더가 최근 목록에 들어감",
+      recentStore.recentFolders.first?.lastPathComponent == "폴더A",
+      "\(recentStore.recentFolders.map(\.lastPathComponent))")
+
+recentStore.openRecentFolder(folderB)
+pump(0.4)
+check("최근 목록에서 고르면 그 폴더가 열림",
+      recentStore.folderURL?.lastPathComponent == "폴더B",
+      recentStore.folderURL?.lastPathComponent ?? "nil")
+check("최근에 연 것이 앞으로 옴",
+      recentStore.recentFolders.map(\.lastPathComponent) == ["폴더B", "폴더A"],
+      "\(recentStore.recentFolders.map(\.lastPathComponent))")
+check("폴더를 바꾸면 노트도 그 폴더 것",
+      recentStore.notes.count == 1, "\(recentStore.notes.count)")
+
+recentStore.openRecentFolder(folderC)
+recentStore.openRecentFolder(folderA)
+pump(0.4)
+check("같은 폴더가 중복으로 쌓이지 않음",
+      Set(recentStore.recentFolders.map(\.path)).count == recentStore.recentFolders.count,
+      "\(recentStore.recentFolders.map(\.lastPathComponent))")
+check("가장 최근이 맨 앞",
+      recentStore.recentFolders.first?.lastPathComponent == "폴더A",
+      "\(recentStore.recentFolders.map(\.lastPathComponent))")
+
+// 폴더를 바꾸면 이전 폴더의 검색·태그 필터가 남아 있으면 안 된다
+recentStore.searchQuery = "노트"
+recentStore.toggleTag("아무거나")
+recentStore.openRecentFolder(folderB)
+pump(0.3)
+check("폴더를 바꾸면 검색어·태그 필터가 초기화됨",
+      recentStore.searchQuery.isEmpty && recentStore.selectedTag == nil,
+      "검색 '\(recentStore.searchQuery)' / 태그 \(recentStore.selectedTag ?? "nil")")
+
+// 최근 목록에 있던 폴더가 지워졌으면
+try! fm.removeItem(at: folderC)
+let afterRemoval = NoteStore()
+pump(0.3)
+check("지워진 폴더는 최근 목록에서 빠짐",
+      !afterRemoval.recentFolders.contains { $0.lastPathComponent == "폴더C" },
+      "\(afterRemoval.recentFolders.map(\.lastPathComponent))")
+
+recentStore.openRecentFolder(folderC)
+check("없는 폴더를 고르면 안내로 넘어감", recentStore.unavailableFolderPath != nil,
+      recentStore.unavailableFolderPath ?? "nil")
+
 print("\n" + (failures.isEmpty ? "ALL PASS (\(total) checks)" : "FAILURES(\(failures.count)/\(total)): \(failures.joined(separator: ", "))"))
 try? fm.removeItem(at: rootDir)
 try? fm.removeItem(at: goneDir)

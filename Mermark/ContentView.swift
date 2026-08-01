@@ -59,7 +59,8 @@ struct ContentView: View {
                 }
             }
             .searchable(text: $store.searchQuery, placement: .sidebar, prompt: "제목·본문 검색")
-            .navigationSplitViewColumnWidth(min: 180, ideal: 220)
+            .safeAreaInset(edge: .top, spacing: 0) { folderSwitcher }
+            .navigationSplitViewColumnWidth(min: 200, ideal: 240)
         } detail: {
             detail
                 // 툴바를 detail에 붙여야 항목이 사이드바 쪽으로 몰려 잘리지 않는다
@@ -121,6 +122,47 @@ struct ContentView: View {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.setString(url.path, forType: .string)
+    }
+
+    /// 검색창 바로 아래에서 지금 폴더를 보여주고, 눌러서 최근 폴더로 바로 옮겨간다
+    private var folderSwitcher: some View {
+        Menu {
+            let others = store.recentFolders.filter { $0 != store.folderURL }
+            if !others.isEmpty {
+                Section("최근 폴더") {
+                    ForEach(others, id: \.self) { folder in
+                        Button {
+                            store.openRecentFolder(folder)
+                        } label: {
+                            Text(folder.lastPathComponent)
+                            Text((folder.path as NSString).abbreviatingWithTildeInPath)
+                        }
+                    }
+                }
+            }
+            Button("다른 폴더 열기…") { store.chooseFolder() }
+            if store.folderURL != nil {
+                Button("Finder에서 보기") { store.revealFolderInFinder() }
+            }
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: "folder")
+                    .foregroundStyle(Brand.accent)
+                Text(store.folderURL?.lastPathComponent ?? "노트 폴더 선택")
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Spacer(minLength: 2)
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            .contentShape(Rectangle())
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(.bar)
     }
 
     /// 누르면 그 태그만 보고, 다시 누르면 전체로 돌아간다

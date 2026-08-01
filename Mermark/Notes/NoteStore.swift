@@ -40,6 +40,7 @@ final class NoteStore: ObservableObject {
     private var tagCache: [URL: (modifiedAt: Date, tags: [String])] = [:]
 
     init() {
+        loadRecentFolders()
         if let path = UserDefaults.standard.string(forKey: folderPathKey) {
             if isUsableFolder(path) {
                 openFolder(URL(fileURLWithPath: path))
@@ -78,6 +79,41 @@ final class NoteStore: ObservableObject {
         openFolder(url)
     }
 
+    /// 최근에 연 노트 폴더. 최근 것이 앞. 지금 열려 있는 폴더도 첫 번째로 들어간다.
+    @Published private(set) var recentFolders: [URL] = []
+
+    private let recentFoldersKey = "recentFolderPaths"
+    private static let maxRecentFolders = 8
+
+    private func loadRecentFolders() {
+        let paths = UserDefaults.standard.stringArray(forKey: recentFoldersKey) ?? []
+        // 그 사이 지워진 폴더는 목록에서 뺀다
+        recentFolders = paths.filter { isUsableFolder($0) }.map { URL(fileURLWithPath: $0) }
+    }
+
+    private func rememberRecentFolder(_ url: URL) {
+        let path = url.standardizedFileURL.path
+        var paths = (UserDefaults.standard.stringArray(forKey: recentFoldersKey) ?? [])
+            .filter { $0 != path }
+        paths.insert(path, at: 0)
+        paths = Array(paths.prefix(Self.maxRecentFolders))
+        UserDefaults.standard.set(paths, forKey: recentFoldersKey)
+        loadRecentFolders()
+    }
+
+    /// 최근 목록에서 골라 연다
+    func openRecentFolder(_ url: URL) {
+        guard isUsableFolder(url.path) else {
+            unavailableFolderPath = url.path
+            return
+        }
+        UserDefaults.standard.set(url.path, forKey: folderPathKey)
+        selectedNoteURL = nil
+        selectedTag = nil
+        searchQuery = ""
+        openFolder(url)
+    }
+
     /// 창 부제로 보여줄 노트 폴더 경로. 홈 아래면 `~`로 줄인다.
     var folderDisplayPath: String? {
         guard let folderURL else { return nil }
@@ -103,6 +139,7 @@ final class NoteStore: ObservableObject {
     private func openFolder(_ url: URL) {
         unavailableFolderPath = nil
         folderURL = url.standardizedFileURL
+        rememberRecentFolder(url)
         reloadNotes()
         if selectedNoteURL == nil {
             select(notes.first?.url)

@@ -231,6 +231,59 @@
     }
   }
 
+  // CommonMark는 링크 주소에 공백을 허용하지 않아 "![그림](./내 사진.png)"이 이미지로 파싱되지
+  // 않고 글자 그대로 남는다. 한글 파일명은 공백이 흔하므로 렌더 전에 주소의 공백만 %20으로 바꾼다.
+  // 줄 안에서만 치환하므로 data-line 매핑(스크롤 동기화)은 그대로다.
+  function encodePathSpaces(markdown) {
+    let fence = null;
+    return markdown.split("\n").map((line) => {
+      const trimmed = line.trim();
+      const runLength = (marker) => {
+        let count = 0;
+        while (trimmed[count] === marker) count += 1;
+        return count;
+      };
+
+      if (fence) {
+        const run = runLength(fence.marker);
+        if (run >= fence.length && trimmed.slice(run) === "") fence = null;
+        return line;
+      }
+      const first = trimmed[0];
+      if (first === "`" || first === "~") {
+        const run = runLength(first);
+        if (run >= 3) {
+          fence = { marker: first, length: run };
+          return line;
+        }
+      }
+      return encodePathSpacesInLine(line);
+    }).join("\n");
+  }
+
+  function encodePathSpacesInLine(line) {
+    const codeSpans = [];
+    const codePattern = /`[^`\n]+`/g;
+    let found;
+    while ((found = codePattern.exec(line)) !== null) {
+      codeSpans.push([found.index, found.index + found[0].length]);
+    }
+    const insideCode = (index) => codeSpans.some(([start, end]) => index >= start && index < end);
+
+    return line.replace(/(!?\[[^\]\n]*\]\()([^)\n]*)(\))/g, (whole, head, destination, tail, offset) => {
+      if (insideCode(offset)) return whole;
+      if (destination.startsWith("<")) return whole;   // 이미 꺾쇠로 감싼 경우
+
+      // 제목이 붙어 있으면 주소 부분만 바꾼다: [글](주소 "제목")
+      const titleMatch = destination.match(/\s+["'][^"']*["']$/);
+      const title = titleMatch ? titleMatch[0] : "";
+      const url = title ? destination.slice(0, destination.length - title.length) : destination;
+      if (!url.includes(" ")) return whole;
+
+      return head + url.split(" ").join("%20") + title + tail;
+    });
+  }
+
   // markdown-it은 GFM 할 일 목록을 모르기 때문에 "[x] 내용"이 글자 그대로 남는다.
   // 렌더 후 앞의 대괄호를 실제 체크박스로 바꾸고, 누르면 원본 줄을 고치도록 연결한다.
   function renderTaskLists() {
@@ -276,7 +329,7 @@
   }
 
   window.renderMarkdown = async (markdown) => {
-    document.getElementById("content").innerHTML = md.render(markdown);
+    document.getElementById("content").innerHTML = md.render(encodePathSpaces(markdown));
     resolveLocalImages();
     resolveLocalLinks();
     renderTaskLists();

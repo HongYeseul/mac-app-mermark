@@ -44,6 +44,8 @@ func writePNG(to url: URL, pixels: Int) {
 
 writePNG(to: noteDir.appendingPathComponent("그림.png"), pixels: 8)
 writePNG(to: folder.appendingPathComponent("assets/로고.png"), pixels: 16)
+// 한글 파일명은 공백이 흔하다. CommonMark는 주소의 공백을 허용하지 않으므로 앱이 처리해야 한다.
+writePNG(to: noteDir.appendingPathComponent("다이어그램 예시.png"), pixels: 24)
 try! "비밀".write(to: root.appendingPathComponent("노트 폴더밖.txt"), atomically: true, encoding: .utf8)
 
 func url(_ string: String) -> URL { URL(string: string)! }
@@ -119,6 +121,8 @@ let markdown = """
 외부 주소: ![원격](https://example.com/x.png)
 
 없는 파일: ![없음](./없는파일.png)
+
+공백 있는 파일명: ![다이어그램](./다이어그램 예시.png)
 """
 
 nav.onReady = {
@@ -156,7 +160,7 @@ nav.onReady = {
                 }
 
                 print("\n── B. 실제 렌더")
-                check("이미지 4개 렌더", items.count == 4, "\(items.count)")
+                check("이미지 5개 렌더", items.count == 5, "\(items.count)")
 
                 let noteImage = items[0]
                 check("노트 기준 이미지가 전용 스킴으로 치환",
@@ -182,6 +186,16 @@ nav.onReady = {
 
                 let missing = items[3]
                 check("없는 파일은 로드되지 않음", (missing["width"] as? Int) == 0, "\(missing["width"] ?? "nil")")
+
+                // CommonMark는 주소의 공백을 허용하지 않아 이미지로 파싱조차 되지 않는다.
+                // 앱이 %20으로 바꿔 주지 않으면 이 항목 자체가 생기지 않는다.
+                let spaced = items.count > 4 ? items[4] : [:]
+                check("공백 있는 이미지가 실제 로드됨 (24px)",
+                      (spaced["width"] as? Int) == 24, "\(spaced["width"] ?? "nil")")
+                check("공백은 %20으로, 이중 인코딩 없이",
+                      (spaced["src"] as? String)?.contains("%20") == true
+                      && (spaced["src"] as? String)?.contains("%2520") == false,
+                      "\(spaced["src"] ?? "nil")")
 
                 finish()
             }

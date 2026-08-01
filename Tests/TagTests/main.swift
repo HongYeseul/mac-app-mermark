@@ -1,6 +1,11 @@
 import AppKit
 import WebKit
 
+// 검증이 실제 ~/.config/mermark을 건드리지 않도록 전용 설정 폴더를 쓴다
+WorkspaceConfig.directory = URL(fileURLWithPath: NSTemporaryDirectory())
+    .appendingPathComponent("mermark-config-tags-\(ProcessInfo.processInfo.processIdentifier)")
+
+
 // 태그 추출 규칙, 태그 필터, 프리뷰 표시를 확인한다.
 
 var failures: [String] = []
@@ -132,7 +137,7 @@ try! "# 정산 노트\n\n#정산 #검토".write(to: folder.appendingPathComponen
 try! "---\ntags:\n  - 정산\n---\n\n# 회의록".write(to: folder.appendingPathComponent("회의록.md"), atomically: true, encoding: .utf8)
 try! "# 잡담\n\n태그 없음".write(to: folder.appendingPathComponent("잡담.md"), atomically: true, encoding: .utf8)
 
-UserDefaults.standard.set([folder.path], forKey: "workspacePaths")
+WorkspaceConfig.save([folder])
 let store = NoteStore()
 RunLoop.main.run(until: Date().addingTimeInterval(0.5))
 

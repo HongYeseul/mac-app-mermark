@@ -1,6 +1,11 @@
 import AppKit
 import Carbon.HIToolbox
 
+// 검증이 실제 ~/.config/mermark을 건드리지 않도록 전용 설정 폴더를 쓴다
+WorkspaceConfig.directory = URL(fileURLWithPath: NSTemporaryDirectory())
+    .appendingPathComponent("mermark-config-capture-\(ProcessInfo.processInfo.processIdentifier)")
+
+
 // 빠른 메모 저장 규칙과 전역 단축키 등록을 확인한다.
 
 var failures: [String] = []
@@ -37,7 +42,7 @@ check("지역 설정과 무관하게 같은 형식",
       NoteStore.captureName(for: timestamp))
 
 print("\n── B. 저장")
-UserDefaults.standard.set([folder.path], forKey: "workspacePaths")
+WorkspaceConfig.save([folder])
 let store = NoteStore()
 pump(0.4)
 
@@ -69,7 +74,7 @@ check("빠른 메모는 현재 선택을 바꾸지 않음", store.selectedNoteUR
       "\(store.selectedNoteURL?.lastPathComponent ?? "nil")")
 
 // 노트 폴더가 없으면 저장하지 않는다
-UserDefaults.standard.removeObject(forKey: "workspacePaths")
+WorkspaceConfig.save([])
 let emptyStore = NoteStore()
 check("작업 공간이 없으면 저장하지 않음", emptyStore.quickCapture("내용", at: timestamp) == nil)
 

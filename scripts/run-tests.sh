@@ -16,7 +16,19 @@ export MERMARK_RESOURCES="$ROOT/Mermark/Resources"
 APP_SOURCES=()
 while IFS= read -r -d '' file; do
     APP_SOURCES+=("$file")
-done < <(find "$ROOT/Mermark" -name '*.swift' ! -name 'MermarkApp.swift' -print0)
+done < <(find "$ROOT/Mermark" "$ROOT/Shared" -name '*.swift' ! -name 'MermarkApp.swift' -print0)
+
+# CLI 검증은 실제 실행 파일을 자식 프로세스로 돌린다. 앱 소스와 같은 컴파일러로 여기서 빌드한다.
+SHARED_SOURCES=()
+while IFS= read -r -d '' file; do
+    SHARED_SOURCES+=("$file")
+done < <(find "$ROOT/Shared" -name '*.swift' -print0)
+if swiftc -o "$BUILD_DIR/mermark" "${SHARED_SOURCES[@]}" "$ROOT/MermarkCLI/main.swift"; then
+    export MERMARK_CLI_BIN="$BUILD_DIR/mermark"
+else
+    echo "mermark 실행 파일 빌드 실패"
+    exit 1
+fi
 
 failed=0
 
@@ -51,6 +63,7 @@ run_suite document-export  "$ROOT/Tests/DocumentExportTests/main.swift"
 run_suite math             "$ROOT/Tests/MathTests/main.swift"
 run_suite theme            "$ROOT/Tests/ThemeTests/main.swift"
 run_suite view-mode        "$ROOT/Tests/ViewModeTests/main.swift"
+run_suite cli              "$ROOT/Tests/CLITests/main.swift"
 
 if [ "$failed" -eq 0 ]; then
     echo "모든 검증 통과"

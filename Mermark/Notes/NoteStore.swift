@@ -44,12 +44,8 @@ final class NoteStore: ObservableObject {
     /// 메뉴에서 PDF 내보내기를 고르면 프리뷰 쪽에서 처리하도록 ContentView가 연결한다
     var onExportPDF: (() -> Void)?
 
-    static let untitledName = "새 노트"
-    private static let maxTitleLength = 50
-
     private var saveWorkItem: DispatchWorkItem?
     private var eventStream: FSEventStreamRef?
-    private let workspacePathsKey = "workspacePaths"
     /// 파일명이 첫 줄과 이미 일치하는 노트만 이름을 따라가게 한다.
     /// 다른 앱에서 만든 "파일명 ≠ 제목" 노트를 앱이 멋대로 개명하지 않기 위한 안전장치.
     private var tracksFilename = false
@@ -61,13 +57,12 @@ final class NoteStore: ObservableObject {
     init() {
         loadRecentFolders()
 
-        let saved = UserDefaults.standard.stringArray(forKey: workspacePathsKey) ?? []
-        let usable = saved.filter { isUsableFolder($0) }
+        let saved = WorkspaceConfig.load().isEmpty ? Self.adoptWorkspacesFromDefaults() : WorkspaceConfig.load()
         // 옮겨지거나 지워진 작업 공간이 있으면 알린다. 빈 화면만 두면 무엇이 잘못됐는지 알 수 없다.
-        if let missing = saved.first(where: { !isUsableFolder($0) }) {
-            unavailableFolderPath = missing
+        if let missing = saved.first(where: { !isUsableFolder($0.path) }) {
+            unavailableFolderPath = missing.path
         }
-        workspaces = usable.map { Workspace(url: URL(fileURLWithPath: $0).standardizedFileURL) }
+        workspaces = saved.filter { isUsableFolder($0.path) }.map { Workspace(url: $0) }
         if !workspaces.isEmpty {
             persistWorkspaces()
             reloadNotes()
@@ -105,7 +100,7 @@ final class NoteStore: ObservableObject {
 
     @discardableResult
     func addWorkspace(_ url: URL) -> Bool {
-        let standardized = url.standardizedFileURL
+        let standardized = WorkspaceConfig.normalize(url)
         guard isUsableFolder(standardized.path) else {
             unavailableFolderPath = standardized.path
             return false
@@ -137,7 +132,21 @@ final class NoteStore: ObservableObject {
     }
 
     private func persistWorkspaces() {
-        UserDefaults.standard.set(workspaces.map(\.url.path), forKey: workspacePathsKey)
+        // 앱과 CLI가 같은 파일을 본다
+        WorkspaceConfig.save(workspaces.map(\.url))
+    }
+
+    /// 설정 파일이 생기기 전 UserDefaults에 저장하던 목록을 한 번만 옮겨 온다.
+    /// 이미 쓰던 사람이 연결해 둔 작업 공간을 잃지 않도록.
+    private static let legacyWorkspacePathsKey = "workspacePaths"
+
+    private static func adoptWorkspacesFromDefaults() -> [URL] {
+        let paths = UserDefaults.standard.stringArray(forKey: legacyWorkspacePathsKey) ?? []
+        guard !paths.isEmpty else { return [] }
+        let urls = paths.map { WorkspaceConfig.normalize(URL(fileURLWithPath: $0)) }
+        WorkspaceConfig.save(urls)
+        UserDefaults.standard.removeObject(forKey: legacyWorkspacePathsKey)
+        return urls
     }
 
     private func isInside(_ url: URL, _ folder: URL) -> Bool {
@@ -205,21 +214,9 @@ final class NoteStore: ObservableObject {
     }
 
     private func scanNotes(in workspace: Workspace) -> [Note] {
-        let manager = FileManager.default
-        guard let walker = manager.enumerator(
-            at: workspace.url,
-            includingPropertiesForKeys: [.contentModificationDateKey, .isDirectoryKey],
-            options: [.skipsHiddenFiles, .skipsPackageDescendants]
-        ) else { return [] }
-
-        var found: [Note] = []
-        for case let url as URL in walker where url.pathExtension.lowercased() == "md" {
-            let standardized = url.standardizedFileURL
-            let modifiedAt = (try? standardized.resourceValues(forKeys: [.contentModificationDateKey])
-                .contentModificationDate) ?? .distantPast
-            found.append(Note(url: standardized, workspaceURL: workspace.url, modifiedAt: modifiedAt))
+        NoteScanner.scan(workspace.url).map {
+            Note(url: $0.url, workspaceURL: workspace.url, modifiedAt: $0.modifiedAt)
         }
-        return found
     }
 
     /// 사이드바에서 작업 공간별로 묶어 보여주기 위한 목록
@@ -312,19 +309,22 @@ final class NoteStore: ObservableObject {
         updateFilenameTracking(for: url)
     }
 
+    /// `mermark://open?path=...` 처리. 이 주소는 아무나 던질 수 있으므로
+    /// 연결된 작업 공간 안의 노트일 때만 연다.
+    @discardableResult
+    func openNote(from url: URL) -> Bool {
+        guard let noteURL = MermarkURL.resolve(url, workspaces: workspaces.map(\.url)) else { return false }
+        // 명령줄에서 방금 만든 노트라면 아직 목록에 없다
+        if !notes.contains(where: { $0.url == noteURL }) { reloadNotes() }
+        select(noteURL)
+        return true
+    }
+
     private func updateFilenameTracking(for url: URL) {
         let name = url.deletingPathExtension().lastPathComponent
         // 첫 줄에서 파생된 이름(또는 아직 이름을 정하지 않은 "새 노트")일 때만 계속 따라간다
-        tracksFilename = Self.isDerived(name, from: Self.fileTitle(from: currentText))
-            || Self.isDerived(name, from: Self.untitledName)
-    }
-
-    /// "제목" 자체이거나 중복 회피로 "제목 2"처럼 숫자만 덧붙은 형태인지
-    private static func isDerived(_ name: String, from title: String) -> Bool {
-        if name == title { return true }
-        guard name.hasPrefix(title + " ") else { return false }
-        let suffix = name.dropFirst(title.count + 1)
-        return !suffix.isEmpty && suffix.allSatisfy(\.isNumber)
+        tracksFilename = NoteNaming.isDerived(name, from: NoteNaming.fileTitle(from: currentText))
+            || NoteNaming.isDerived(name, from: NoteNaming.untitled)
     }
 
     /// Cmd+N: 제목 입력 없이 빈 노트를 만들고 바로 타이핑할 수 있게 선택 + 포커스 (PLAN.md 4)
@@ -337,13 +337,13 @@ final class NoteStore: ObservableObject {
 
     /// 어디에 만들지 지정하지 않으면 기본 작업 공간에 만든다
     func createNote(in folder: URL? = nil) {
-        let target = folder ?? defaultWorkspace?.url
-        guard let target, let url = uniqueURL(for: Self.untitledName, in: target, excluding: nil) else { return }
+        guard let target = folder ?? defaultWorkspace?.url else { return }
+        let url = NoteNaming.uniqueURL(for: NoteNaming.untitled, in: target)
         flushPendingSave()
         do {
             try "".write(to: url, atomically: true, encoding: .utf8)
         } catch {
-            NSLog("노트 생성 실패: \(error.localizedDescription)")
+            NSLog("%@", "노트 생성 실패: \(error.localizedDescription)")
             return
         }
         reloadNotes()
@@ -358,12 +358,12 @@ final class NoteStore: ObservableObject {
     @discardableResult
     func quickCapture(_ text: String, at timestamp: Date = Date()) -> URL? {
         let body = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !body.isEmpty, let target = defaultWorkspace?.url,
-              let url = uniqueURL(for: Self.captureName(for: timestamp), in: target, excluding: nil) else { return nil }
+        guard !body.isEmpty, let target = defaultWorkspace?.url else { return nil }
+        let url = NoteNaming.uniqueURL(for: Self.captureName(for: timestamp), in: target)
         do {
             try body.write(to: url, atomically: true, encoding: .utf8)
         } catch {
-            NSLog("빠른 메모 저장 실패: \(error.localizedDescription)")
+            NSLog("%@", "빠른 메모 저장 실패: \(error.localizedDescription)")
             return nil
         }
         reloadNotes()
@@ -403,7 +403,7 @@ final class NoteStore: ObservableObject {
         do {
             try currentText.write(to: url, atomically: true, encoding: .utf8)
         } catch {
-            NSLog("자동 저장 실패: \(error.localizedDescription)")
+            NSLog("%@", "자동 저장 실패: \(error.localizedDescription)")
             return
         }
         syncFilename(of: url)
@@ -411,49 +411,19 @@ final class NoteStore: ObservableObject {
 
     // MARK: - 첫 줄 = 파일명
 
-    /// 첫 줄에서 파일명을 만든다. 마크다운 헤딩 기호와 파일명에 쓸 수 없는 문자를 제거. (PLAN.md 8)
-    static func fileTitle(from text: String) -> String {
-        var title = String(text.prefix(while: { $0 != "\n" })).trimmingCharacters(in: .whitespaces)
-        while title.hasPrefix("#") { title.removeFirst() }
-        // "/"는 경로 구분자, ":"는 Finder에서 "/"로 표시되므로 둘 다 치환
-        title = title
-            .replacingOccurrences(of: "/", with: "-")
-            .replacingOccurrences(of: ":", with: "-")
-        // 앞의 "."을 남기면 숨김 파일이 되어 목록에서 사라진다
-        while title.hasPrefix(".") { title.removeFirst() }
-        title = title.trimmingCharacters(in: .whitespaces)
-        if title.count > maxTitleLength {
-            title = String(title.prefix(maxTitleLength)).trimmingCharacters(in: .whitespaces)
-        }
-        return title.isEmpty ? untitledName : title
-    }
-
     private func syncFilename(of url: URL) {
         guard tracksFilename else { return }
-        let desired = Self.fileTitle(from: currentText)
-        guard desired != url.deletingPathExtension().lastPathComponent,
-              let target = uniqueURL(for: desired, in: url.deletingLastPathComponent(), excluding: url),
-              target != url else { return }
+        let desired = NoteNaming.fileTitle(from: currentText)
+        guard desired != url.deletingPathExtension().lastPathComponent else { return }
+        let target = NoteNaming.uniqueURL(for: desired, in: url.deletingLastPathComponent(), excluding: url)
+        guard target != url else { return }
         do {
             try FileManager.default.moveItem(at: url, to: target)
             selectedNoteURL = target
             reloadNotes()
         } catch {
-            NSLog("파일명 변경 실패: \(error.localizedDescription)")
+            NSLog("%@", "파일명 변경 실패: \(error.localizedDescription)")
         }
-    }
-
-    /// 같은 제목이 이미 있으면 "제목 2", "제목 3"으로 비켜 간다. (대소문자 무시 파일시스템 고려)
-    private func uniqueURL(for title: String, in folder: URL, excluding current: URL?) -> URL? {
-        let fm = FileManager.default
-        var candidate = folder.appendingPathComponent(title + ".md")
-        var suffix = 2
-        while fm.fileExists(atPath: candidate.path),
-              candidate.path.lowercased() != current?.path.lowercased() {
-            candidate = folder.appendingPathComponent("\(title) \(suffix).md")
-            suffix += 1
-        }
-        return candidate
     }
 
     // MARK: - FSEvents 외부 변경 감지

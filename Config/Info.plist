@@ -8,5 +8,17 @@
 <dict>
 	<key>CFBundleIconFile</key>
 	<string>Mermark</string>
+	<!-- 명령줄 도구가 "이 노트를 열어라"라고 말할 때 쓰는 주소 -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>dev.yeseul.mermark.note</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>mermark</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

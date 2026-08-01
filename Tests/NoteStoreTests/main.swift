@@ -1,6 +1,11 @@
 import AppKit
 import Foundation
 
+// 검증이 실제 ~/.config/mermark을 건드리지 않도록 전용 설정 폴더를 쓴다
+WorkspaceConfig.directory = URL(fileURLWithPath: NSTemporaryDirectory())
+    .appendingPathComponent("mermark-config-notestore-\(ProcessInfo.processInfo.processIdentifier)")
+
+
 // 실제 앱 코드(NoteStore.swift)를 그대로 컴파일해 실파일·실 FSEvents로 검증한다.
 // 모킹 없음: 진짜 파일을 만들고, 지우고, 밖에서 고친 뒤 앱 상태가 따라오는지 본다.
 
@@ -27,16 +32,16 @@ func read(_ name: String) -> String? { try? String(contentsOf: rootDir.appending
 // MARK: - A. 첫 줄 → 파일명 규칙 (순수 함수)
 
 print("── A. 첫 줄 → 파일명 규칙")
-check("헤딩 기호 제거", NoteStore.fileTitle(from: "# 아키텍처 노트\n본문") == "아키텍처 노트",
-      NoteStore.fileTitle(from: "# 아키텍처 노트\n본문"))
-check("헤딩 없는 첫 줄 그대로", NoteStore.fileTitle(from: "그냥 메모\n둘째 줄") == "그냥 메모")
-check("빈 텍스트 → 기본 이름", NoteStore.fileTitle(from: "") == "새 노트")
-check("헤딩 기호만 → 기본 이름", NoteStore.fileTitle(from: "###   \n본문") == "새 노트")
-check("금지 문자 / : 치환", NoteStore.fileTitle(from: "# 2026/07/31 회의: 정산") == "2026-07-31 회의- 정산",
-      NoteStore.fileTitle(from: "# 2026/07/31 회의: 정산"))
-check("앞의 점 제거 (숨김 파일 방지)", NoteStore.fileTitle(from: ".gitignore 설명") == "gitignore 설명",
-      NoteStore.fileTitle(from: ".gitignore 설명"))
-check("긴 제목 50자 절단", NoteStore.fileTitle(from: String(repeating: "가", count: 80)).count == 50)
+check("헤딩 기호 제거", NoteNaming.fileTitle(from: "# 아키텍처 노트\n본문") == "아키텍처 노트",
+      NoteNaming.fileTitle(from: "# 아키텍처 노트\n본문"))
+check("헤딩 없는 첫 줄 그대로", NoteNaming.fileTitle(from: "그냥 메모\n둘째 줄") == "그냥 메모")
+check("빈 텍스트 → 기본 이름", NoteNaming.fileTitle(from: "") == "새 노트")
+check("헤딩 기호만 → 기본 이름", NoteNaming.fileTitle(from: "###   \n본문") == "새 노트")
+check("금지 문자 / : 치환", NoteNaming.fileTitle(from: "# 2026/07/31 회의: 정산") == "2026-07-31 회의- 정산",
+      NoteNaming.fileTitle(from: "# 2026/07/31 회의: 정산"))
+check("앞의 점 제거 (숨김 파일 방지)", NoteNaming.fileTitle(from: ".gitignore 설명") == "gitignore 설명",
+      NoteNaming.fileTitle(from: ".gitignore 설명"))
+check("긴 제목 50자 절단", NoteNaming.fileTitle(from: String(repeating: "가", count: 80)).count == 50)
 
 // MARK: - 노트 폴더 준비
 
@@ -46,7 +51,7 @@ defer { try? fm.removeItem(at: rootDir) }
 
 try! "# 기존 노트\n본문".write(to: rootDir.appendingPathComponent("기존 노트.md"), atomically: true, encoding: .utf8)
 try! "not markdown".write(to: rootDir.appendingPathComponent("무시할파일.txt"), atomically: true, encoding: .utf8)
-UserDefaults.standard.set([rootDir.path], forKey: "workspacePaths")
+WorkspaceConfig.save([rootDir])
 
 let store = NoteStore()
 pump(0.5)
@@ -178,7 +183,7 @@ check("외부 수정 후 검색 결과 갱신", searchStore.filteredNotes.contai
 // MARK: - F. 노트 폴더가 없을 때
 
 print("\n── F. 노트 폴더가 없을 때")
-UserDefaults.standard.removeObject(forKey: "workspacePaths")
+WorkspaceConfig.save([])
 let emptyStore = NoteStore()
 pump(0.3)
 check("폴더가 없으면 목록도 비어 있음", emptyStore.notes.isEmpty && emptyStore.workspaces.isEmpty,
@@ -189,7 +194,7 @@ check("폴더가 없으면 새 노트를 만들지 않고 조용히 넘어감",
       "\(emptyStore.selectedNoteURL?.lastPathComponent ?? "nil")")
 
 // 폴더가 생기면 곧바로 만들 수 있어야 한다
-UserDefaults.standard.set([rootDir.path], forKey: "workspacePaths")
+WorkspaceConfig.save([rootDir])
 let readyStore = NoteStore()
 pump(0.3)
 let beforeCount = readyStore.notes.count
@@ -208,7 +213,7 @@ try! fm.createDirectory(at: goneDir, withIntermediateDirectories: true)
 try! "# 노트".write(to: goneDir.appendingPathComponent("노트.md"), atomically: true, encoding: .utf8)
 
 // 1) 시작할 때 저장된 경로가 없으면 사정을 알린다
-UserDefaults.standard.set([goneDir.path + "-없는경로"], forKey: "workspacePaths")
+WorkspaceConfig.save([URL(fileURLWithPath: goneDir.path + "-없는경로")])
 let missingStore = NoteStore()
 pump(0.3)
 check("없는 경로면 폴더를 열지 않음", missingStore.workspaces.isEmpty)
@@ -217,7 +222,7 @@ check("없는 경로를 알려줌", missingStore.unavailableFolderPath == goneDi
 
 // 2) 폴더가 아니라 파일을 가리켜도 마찬가지
 let filePath = goneDir.appendingPathComponent("노트.md").path
-UserDefaults.standard.set([filePath], forKey: "workspacePaths")
+WorkspaceConfig.save([URL(fileURLWithPath: filePath)])
 let filePointingStore = NoteStore()
 pump(0.3)
 check("폴더가 아닌 경로도 걸러냄", filePointingStore.workspaces.isEmpty
@@ -225,7 +230,7 @@ check("폴더가 아닌 경로도 걸러냄", filePointingStore.workspaces.isEmp
       filePointingStore.unavailableFolderPath ?? "nil")
 
 // 3) 정상 폴더면 안내를 띄우지 않는다
-UserDefaults.standard.set([goneDir.path], forKey: "workspacePaths")
+WorkspaceConfig.save([goneDir])
 let liveStore = NoteStore()
 pump(0.4)
 check("정상 폴더면 안내 없음", !liveStore.workspaces.isEmpty && liveStore.unavailableFolderPath == nil,
@@ -247,7 +252,7 @@ check("대기 중이던 저장이 폴더를 되살리지 않음", !fm.fileExists
 // MARK: - H. 작업 폴더 위치 보여주기
 
 print("\n── H. 작업 폴더 위치")
-UserDefaults.standard.set([rootDir.path], forKey: "workspacePaths")
+WorkspaceConfig.save([rootDir])
 let pathStore = NoteStore()
 pump(0.3)
 check("작업 공간 경로를 알려줌", pathStore.workspaces.first?.displayPath != nil)
@@ -260,7 +265,7 @@ let home = FileManager.default.homeDirectoryForCurrentUser
 let underHome = home.appendingPathComponent("mermark-경로표시-\(ProcessInfo.processInfo.processIdentifier)")
 try! fm.createDirectory(at: underHome, withIntermediateDirectories: true)
 defer { try? fm.removeItem(at: underHome) }
-UserDefaults.standard.set([underHome.path], forKey: "workspacePaths")
+WorkspaceConfig.save([underHome])
 let homeStore = NoteStore()
 pump(0.3)
 check("홈 아래 경로는 ~ 로 줄임", homeStore.workspaces.first?.displayPath.hasPrefix("~/") == true,
@@ -269,7 +274,7 @@ check("줄인 경로에도 폴더 이름이 남음",
       homeStore.workspaces.first?.displayPath.contains("mermark-경로표시") == true,
       homeStore.workspaces.first?.displayPath ?? "nil")
 
-UserDefaults.standard.removeObject(forKey: "workspacePaths")
+WorkspaceConfig.save([])
 let noFolderStore = NoteStore()
 pump(0.2)
 check("작업 공간이 없으면 경로도 없음", noFolderStore.workspaces.isEmpty,
@@ -279,7 +284,7 @@ check("작업 공간이 없으면 경로도 없음", noFolderStore.workspaces.is
 
 print("\n── I. 여러 작업 공간")
 UserDefaults.standard.removeObject(forKey: "recentFolderPaths")
-UserDefaults.standard.removeObject(forKey: "workspacePaths")
+WorkspaceConfig.save([])
 
 let spaceA = rootDir.appendingPathComponent("작업공간A")
 let spaceB = rootDir.appendingPathComponent("작업공간B")

@@ -7,6 +7,10 @@ struct SettingsView: View {
 
     @AppStorage(Theme.storageKey) private var themeName = Theme.mint.rawValue
 
+    @State private var installedPath: String?
+    @State private var manualCommand: String?
+    @State private var cliInstalled = CLIInstaller.bundledTool.map { CLIInstaller.isInstalled(tool: $0) } ?? false
+
     var body: some View {
         Form {
             Picker("메인 색상", selection: themeBinding) {
@@ -48,9 +52,52 @@ struct SettingsView: View {
             Text("PNG 내보내기에 적용됩니다. SVG는 배경 없이 테마만 반영합니다.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
+
+            Divider()
+
+            commandLineSection
         }
         .formStyle(.grouped)
         .frame(width: 380)
+    }
+
+    @ViewBuilder
+    private var commandLineSection: some View {
+        HStack {
+            Text("명령줄 도구")
+            Spacer()
+            Button(cliInstalled ? "다시 설치" : "설치") { installCLI() }
+                .disabled(CLIInstaller.bundledTool == nil)
+        }
+        if let manualCommand {
+            Text("권한이 없어 직접 실행해야 합니다:")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+            Text(manualCommand)
+                .font(.system(.footnote, design: .monospaced))
+                .textSelection(.enabled)
+        } else if let installedPath {
+            Text("\(installedPath) 에 걸었습니다. `mermark help`로 확인하세요.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        } else {
+            Text("터미널에서 `mermark new 회의록`처럼 쓸 수 있게 /usr/local/bin에 링크를 만듭니다.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func installCLI() {
+        guard let tool = CLIInstaller.bundledTool else { return }
+        switch CLIInstaller.install(tool: tool) {
+        case .installed(let path):
+            installedPath = path
+            manualCommand = nil
+            cliInstalled = true
+        case .needsManualStep(let command):
+            manualCommand = command
+            installedPath = nil
+        }
     }
 
     private var themeBinding: Binding<Theme> {

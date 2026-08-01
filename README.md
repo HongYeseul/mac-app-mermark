@@ -38,6 +38,8 @@ Mermaid 다이어그램을 **바로 이미지로 뽑아 쓰는** macOS 마크다
 - **PDF 내보내기** — `⌘⇧P`로 렌더된 문서 전체를 쪽 단위로 나눈 A4 PDF로 저장
 - **빠른 메모** — 메뉴바 아이콘이나 어디서든 `⌘⇧N`으로 창을 띄워 바로 적고 `⌘⏎`로 저장.
   파일명은 `2026-07-31 1432.md`처럼 시각이 됩니다
+- **명령줄 도구** — `mermark new 회의록`으로 만들고 `mermark open 회의록`으로 앱에서 엽니다.
+  터미널에서 만들고 앱에서 보는 식으로 섞어 쓸 수 있습니다
 - **완전 오프라인** — 마크다운·다이어그램·수식·코드 강조 라이브러리를 모두 앱에 번들
 
 ## 요구 사항
@@ -81,7 +83,7 @@ Xcode에서 `Mermark.xcodeproj`를 열고 Run 해도 됩니다.
 | `⌘⇧P` | 문서 전체를 PDF로 내보내기 |
 | `⌘⇧N` | 어디서든 빠른 메모 창 (전역 단축키) |
 | 메뉴바 ✏️ 아이콘 | 빠른 메모 팝오버 |
-| `⌘,` | 설정 (메인 색상 · 내보내기 해상도 · 테마 · 배경) |
+| `⌘,` | 설정 (메인 색상 · 명령줄 도구 · 내보내기 해상도 · 테마 · 배경) |
 | 사이드바 검색창 | 제목과 본문을 함께 검색 |
 | 사이드바 검색창 | `#태그`로 태그 필터, 글자와 섞어 쓸 수 있음 |
 | 작업 공간 이름 옆 `+` | 그 공간에 새 노트 |
@@ -93,6 +95,27 @@ Xcode에서 `Mermark.xcodeproj`를 열고 Run 해도 됩니다.
 
 단, **파일명과 첫 줄이 원래 다른 노트는 이름을 바꾸지 않습니다.** 다른 앱에서 만든 노트를
 Mermark로 열어 편집해도 파일명이 그대로 유지되므로, 다른 노트에서 걸어둔 링크가 깨지지 않습니다.
+
+## 명령줄에서 쓰기
+
+설정(`⌘,`)에서 **명령줄 도구 설치**를 누르면 `/usr/local/bin/mermark`에 링크가 걸립니다.
+권한이 없으면 직접 실행할 `ln -s` 명령을 알려 줍니다.
+
+```bash
+mermark new 회의록          # 만들고 경로를 출력 → vim "$(mermark new 회의록)"
+mermark open 회의록         # 앱에서 그 노트를 연다 (앱이 꺼져 있으면 띄운다)
+mermark list --tag 정산     # 노트 경로 목록 (최근 수정 순)
+mermark path               # 작업 공간 경로
+```
+
+`--workspace <이름>`으로 어느 작업 공간을 볼지 고릅니다. 출력이 경로 한 줄씩이라
+`mermark list | fzf | xargs vim`처럼 이어 붙이기 좋습니다.
+
+앱과 도구는 같은 설정 파일을 봅니다.
+
+```
+~/.config/mermark/config.json
+```
 
 ## 동작 방식
 
@@ -176,6 +199,7 @@ Mermaid 블록처럼 "원본 6줄 = 화면 300px"인 구간에서도 어긋나�
 | `task-list` | 할 일 체크박스 렌더와 원본 줄 뒤집기 18 케이스 |
 | `math` | KaTeX 조판·폰트 로드·통화 표기 오탐 방지 16 케이스 |
 | `view-mode` | 실제 `NSHostingView`로 모드 전환 시 상태 보존 12 케이스 |
+| `cli` | 실제 `mermark` 실행 파일을 자식 프로세스로 돌린 명령줄 도구 76 케이스 |
 
 프리뷰의 `data-line` 앵커와 양방향 스크롤은 브라우저에서 `Mermark/Resources/preview.html`을
 직접 열어 확인합니다 (문서 끝 클램프 구간을 빼면 줄 왕복 오차 0).
@@ -184,12 +208,13 @@ Mermaid 블록처럼 "원본 6줄 = 화면 300px"인 구간에서도 어긋나�
 
 ```
 Mermark/
-├── MermarkApp.swift          앱 진입점, 메뉴 명령, 설정 창
+├── MermarkApp.swift          앱 진입점, 메뉴 명령, mermark:// 주소 수신
 ├── ContentView.swift         3분할 레이아웃, 모드 전환, 목차, 스크롤 동기화 배선
 ├── SettingsView.swift        메인 색상·내보내기 옵션 (⌘,)
 ├── Theme.swift               테마별 색 정의 (색을 바꾸는 단 하나의 자리)
 ├── Brand.swift               고른 테마를 앱·프리뷰·Dock 아이콘에 배포
 ├── AppIcon.swift             아이콘을 코드로 그림 (Dock과 .icns가 같은 코드)
+├── CLIInstaller.swift        번들 안 mermark를 /usr/local/bin에 링크
 ├── Notes/
 │   ├── NoteStore.swift       작업 공간·노트 목록·자동 저장·파일명 동기화·FSEvents
 │   ├── SearchQuery.swift     검색어에서 #태그와 글자를 갈라냄
@@ -220,7 +245,21 @@ Mermark/
     ├── export.html           내보내기 전용 최소 템플릿
     ├── *.min.js, *.min.css   번들 라이브러리
     └── KaTeX_*.woff2         수식 폰트 (평면 배치, scripts/fetch-vendor.sh 참고)
+
+Shared/                       앱과 명령줄 도구가 함께 쓰는 코드
+├── WorkspaceConfig.swift     ~/.config/mermark/config.json 읽기/쓰기
+├── NoteNaming.swift          파일명 규칙 (첫 줄 = 제목, 중복 회피)
+├── NoteScanner.swift         작업 공간을 하위 폴더까지 훑기
+├── MarkdownTags.swift        본문 #태그와 프론트매터 tags 추출
+├── MermarkURL.swift          mermark:// 주소 만들기/검사
+└── MermarkCommand.swift      mermark 명령 동작
+
+MermarkCLI/
+└── main.swift                출력과 앱 실행만 맡는 얇은 껍데기
 ```
+
+명령줄 도구는 앱 번들의 `Contents/Helpers/mermark`에 들어갑니다. `Contents/MacOS`에 두면
+대소문자를 구분하지 않는 파일시스템에서 앱 바이너리 `Mermark`와 같은 이름이라 서로를 덮어씁니다.
 
 AppKit 뷰를 SwiftUI 래퍼가 아니라 컨트롤러가 소유하는 것이 핵심입니다. 덕분에 모드를 전환해도
 뷰가 재생성되지 않아 실행 취소 기록·스크롤 위치·Mermaid 렌더 결과가 그대로 유지됩니다.

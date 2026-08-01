@@ -61,21 +61,22 @@
   li.task-item { list-style: none; margin-left: -1.4em; }
   li.task-item input[type="checkbox"] { margin-right: 6px; vertical-align: middle; }
   li.task-item.done { color: rgba(127, 127, 127, 0.85); text-decoration: line-through; }
+  /* 메인 색상(민트). Brand.swift와 같은 값을 쓴다 — 한쪽만 고치면 어긋난다 */
   .tag {
     display: inline-block;
     padding: 0 8px;
     border-radius: 10px;
-    background: rgba(120, 85, 215, 0.14);
-    color: #5b3fc4;
+    background: rgba(69, 199, 182, 0.16);
+    color: #17786b;
     font-size: 0.88em;
     line-height: 1.5;
     cursor: pointer;
     white-space: nowrap;
   }
-  .tag:hover { background: rgba(120, 85, 215, 0.26); }
+  .tag:hover { background: rgba(69, 199, 182, 0.3); }
   @media (prefers-color-scheme: dark) {
-    .tag { background: rgba(165, 135, 255, 0.22); color: #bcaaff; }
-    .tag:hover { background: rgba(165, 135, 255, 0.34); }
+    .tag { background: rgba(126, 220, 204, 0.22); color: #7edccc; }
+    .tag:hover { background: rgba(126, 220, 204, 0.34); }
   }
 </style>
 <script src="markdown-it.min.js"></script>

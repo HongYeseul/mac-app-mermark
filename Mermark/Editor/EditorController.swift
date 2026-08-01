@@ -126,7 +126,7 @@ final class EditorController: NSObject, ObservableObject, NSTextViewDelegate {
             return [.font: NSFont.monospacedSystemFont(ofSize: size, weight: .bold),
                     .foregroundColor: NSColor.textColor]
         case .codeBlock, .inlineCode:
-            return [.foregroundColor: NSColor.systemTeal]
+            return [.foregroundColor: Brand.codeNSColor]
         case .strong:
             return [.font: boldFont]
         case .emphasis:
@@ -142,7 +142,7 @@ final class EditorController: NSObject, ObservableObject, NSTextViewDelegate {
         case .thematicBreak:
             return [.foregroundColor: NSColor.tertiaryLabelColor]
         case .tag:
-            return [.foregroundColor: NSColor.systemPurple]
+            return [.foregroundColor: Brand.accentNSColor]
         }
     }
 }

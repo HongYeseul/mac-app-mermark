@@ -91,6 +91,8 @@ struct ContentView: View {
                 }
         }
         .navigationTitle(store.folderURL?.lastPathComponent ?? "Mermark")
+        // 선택 강조·세그먼트 등 시스템 컨트롤까지 메인 색상을 따르게 한다
+        .tint(Brand.accent)
         .inspector(isPresented: $showsOutline) {
             outline
                 .inspectorColumnWidth(min: 180, ideal: 240, max: 360)
@@ -106,9 +108,9 @@ struct ContentView: View {
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: isSelected ? "tag.fill" : "tag")
-                    .foregroundStyle(isSelected ? Color.accentColor : .secondary)
+                    .foregroundStyle(isSelected ? Brand.accent : .secondary)
                 Text(tag.name)
-                    .foregroundStyle(isSelected ? Color.accentColor : .primary)
+                    .foregroundStyle(isSelected ? Brand.accent : .primary)
                 Spacer()
                 Text("\(tag.count)")
                     .font(.caption)

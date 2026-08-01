@@ -323,8 +323,8 @@ recentStore.toggleTag("아무거나")
 recentStore.openRecentFolder(folderB)
 pump(0.3)
 check("폴더를 바꾸면 검색어·태그 필터가 초기화됨",
-      recentStore.searchQuery.isEmpty && recentStore.selectedTag == nil,
-      "검색 '\(recentStore.searchQuery)' / 태그 \(recentStore.selectedTag ?? "nil")")
+      recentStore.searchQuery.isEmpty && recentStore.activeTags.isEmpty,
+      "검색 '\(recentStore.searchQuery)' / 태그 \(recentStore.activeTags)")
 
 // 최근 목록에 있던 폴더가 지워졌으면
 try! fm.removeItem(at: folderC)

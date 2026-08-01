@@ -38,13 +38,6 @@ struct ContentView: View {
     var body: some View {
         NavigationSplitView {
             List(selection: selectionBinding) {
-                if !store.allTags.isEmpty {
-                    Section("태그") {
-                        ForEach(store.allTags, id: \.name) { tag in
-                            tagRow(tag)
-                        }
-                    }
-                }
                 Section("노트") {
                     ForEach(store.filteredNotes) { note in
                         Label(note.title, systemImage: "doc.text")
@@ -163,27 +156,6 @@ struct ContentView: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
         .background(.bar)
-    }
-
-    /// 누르면 그 태그만 보고, 다시 누르면 전체로 돌아간다
-    private func tagRow(_ tag: (name: String, count: Int)) -> some View {
-        let isSelected = store.selectedTag?.caseInsensitiveCompare(tag.name) == .orderedSame
-        return Button {
-            store.toggleTag(tag.name)
-        } label: {
-            HStack(spacing: 6) {
-                Image(systemName: isSelected ? "tag.fill" : "tag")
-                    .foregroundStyle(isSelected ? Brand.accent : .secondary)
-                Text(tag.name)
-                    .foregroundStyle(isSelected ? Brand.accent : .primary)
-                Spacer()
-                Text("\(tag.count)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
     }
 
     @ViewBuilder

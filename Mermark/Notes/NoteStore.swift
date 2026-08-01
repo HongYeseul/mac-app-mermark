@@ -19,7 +19,6 @@ final class NoteStore: ObservableObject {
     /// Cmd+N 직후 에디터로 포커스를 넘기기 위한 신호 (값이 바뀌면 에디터가 first responder가 됨)
     @Published private(set) var focusRequestID = 0
     @Published var searchQuery = ""
-    @Published var selectedTag: String?
     /// 저장된 노트 폴더를 쓸 수 없을 때. 화면에 사정을 알리고 다시 고르게 하려고 둔다.
     @Published private(set) var unavailableFolderPath: String?
     /// 메뉴에서 PDF 내보내기를 고르면 프리뷰 쪽에서 처리하도록 ContentView가 연결한다
@@ -109,7 +108,7 @@ final class NoteStore: ObservableObject {
         }
         UserDefaults.standard.set(url.path, forKey: folderPathKey)
         selectedNoteURL = nil
-        selectedTag = nil
+        searchQuery = ""
         searchQuery = ""
         openFolder(url)
     }
@@ -193,8 +192,9 @@ final class NoteStore: ObservableObject {
         textChanged(updated)
     }
 
+    /// 태그를 검색창에 넣거나 뺀다. 프리뷰에서 태그를 누를 때 쓴다.
     func toggleTag(_ tag: String) {
-        selectedTag = (selectedTag?.caseInsensitiveCompare(tag) == .orderedSame) ? nil : tag
+        searchQuery = SearchQuery.toggling(tag, in: searchQuery)
     }
 
     private func tags(of note: Note) -> [String] {
@@ -206,29 +206,34 @@ final class NoteStore: ObservableObject {
         return parsed
     }
 
-    /// 태그를 고르면 먼저 걸러내고, 검색어는 제목이 걸린 노트를 앞에 둔다. 대소문자와 자모 차이는 무시.
+    /// 검색창 하나로 태그와 글자를 함께 거른다.
+    /// `#정산 회의` = 정산 태그가 붙은 노트 중 "회의"가 든 것. 제목이 걸린 노트를 앞에 둔다.
     var filteredNotes: [Note] {
+        let query = SearchQuery.parse(searchQuery)
+        guard !query.isEmpty else { return notes }
+
         var candidates = notes
-        if let selectedTag {
+        for tag in query.tags {
             candidates = candidates.filter { note in
-                tags(of: note).contains { $0.caseInsensitiveCompare(selectedTag) == .orderedSame }
+                tags(of: note).contains { $0.caseInsensitiveCompare(tag) == .orderedSame }
             }
         }
-
-        let query = searchQuery.trimmingCharacters(in: .whitespaces)
-        guard !query.isEmpty else { return candidates }
+        guard !query.text.isEmpty else { return candidates }
 
         var titleMatches: [Note] = []
         var bodyMatches: [Note] = []
         for note in candidates {
-            if note.title.localizedStandardContains(query) {
+            if note.title.localizedStandardContains(query.text) {
                 titleMatches.append(note)
-            } else if content(of: note).localizedStandardContains(query) {
+            } else if content(of: note).localizedStandardContains(query.text) {
                 bodyMatches.append(note)
             }
         }
         return titleMatches + bodyMatches
     }
+
+    /// 지금 검색창에 걸려 있는 태그들
+    var activeTags: [String] { SearchQuery.parse(searchQuery).tags }
 
     private func content(of note: Note) -> String {
         if let cached = contentCache[note.url], cached.modifiedAt == note.modifiedAt {
@@ -431,7 +436,7 @@ final class NoteStore: ObservableObject {
         notes = []
         selectedNoteURL = nil
         currentText = ""
-        selectedTag = nil
+        searchQuery = ""
         contentCache = [:]
         tagCache = [:]
 

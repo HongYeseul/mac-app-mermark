@@ -98,7 +98,27 @@ tags: ["따옴표", '작은따옴표']
 """
 check("따옴표 제거", tags(quoted) == ["따옴표", "작은따옴표"], "\(tags(quoted))")
 
-print("\n── D. 태그 필터")
+print("\n── D. 검색창으로 태그 거르기")
+
+// 검색어 한 줄에서 태그와 글자를 갈라낸다
+check("태그만", SearchQuery.parse("#정산") == SearchQuery(tags: ["정산"], text: ""),
+      "\(SearchQuery.parse("#정산"))")
+check("글자만", SearchQuery.parse("회의록") == SearchQuery(tags: [], text: "회의록"))
+check("섞어 쓰기", SearchQuery.parse("#정산 회의") == SearchQuery(tags: ["정산"], text: "회의"))
+check("태그 여러 개", SearchQuery.parse("#정산 #검토") == SearchQuery(tags: ["정산", "검토"], text: ""))
+check("# 하나만 있으면 글자로", SearchQuery.parse("#") == SearchQuery(tags: [], text: "#"))
+check("대소문자 다른 중복은 하나로",
+      SearchQuery.parse("#Todo #todo") == SearchQuery(tags: ["Todo"], text: ""),
+      "\(SearchQuery.parse("#Todo #todo"))")
+check("빈 검색어", SearchQuery.parse("   ").isEmpty)
+
+check("태그 넣기", SearchQuery.toggling("정산", in: "회의") == "#정산 회의",
+      SearchQuery.toggling("정산", in: "회의"))
+check("같은 태그 다시 누르면 빠짐", SearchQuery.toggling("정산", in: "#정산 회의") == "회의",
+      SearchQuery.toggling("정산", in: "#정산 회의"))
+check("대소문자 달라도 빠짐", SearchQuery.toggling("정산", in: "#정산") == "",
+      SearchQuery.toggling("정산", in: "#정산"))
+
 let app = NSApplication.shared
 app.setActivationPolicy(.accessory)
 
@@ -107,7 +127,6 @@ let folder = URL(fileURLWithPath: NSTemporaryDirectory())
     .appendingPathComponent("mermark-tags-\(ProcessInfo.processInfo.processIdentifier)")
 try? fm.removeItem(at: folder)
 try! fm.createDirectory(at: folder, withIntermediateDirectories: true)
-defer { try? fm.removeItem(at: folder) }
 
 try! "# 정산 노트\n\n#정산 #검토".write(to: folder.appendingPathComponent("정산 노트.md"), atomically: true, encoding: .utf8)
 try! "---\ntags:\n  - 정산\n---\n\n# 회의록".write(to: folder.appendingPathComponent("회의록.md"), atomically: true, encoding: .utf8)
@@ -115,38 +134,39 @@ try! "# 잡담\n\n태그 없음".write(to: folder.appendingPathComponent("잡담
 
 UserDefaults.standard.set(folder.path, forKey: "notesFolderPath")
 let store = NoteStore()
-pump(0.5)
+RunLoop.main.run(until: Date().addingTimeInterval(0.5))
 
-let all = store.allTags
-check("태그 목록 수집", all.map(\.name).sorted() == ["검토", "정산"], "\(all)")
-check("사용 횟수 집계", all.first(where: { $0.name == "정산" })?.count == 2, "\(all)")
-check("많이 쓰인 태그가 앞", all.first?.name == "정산", "\(all.map(\.name))")
+check("검색 전에는 전체", store.filteredNotes.count == 3, "\(store.filteredNotes.map(\.title))")
 
-check("필터 전에는 전체", store.filteredNotes.count == 3, "\(store.filteredNotes.map(\.title))")
-
-store.toggleTag("정산")
+store.searchQuery = "#정산"
 check("태그로 거르기",
       Set(store.filteredNotes.map(\.title)) == ["정산 노트", "회의록"], "\(store.filteredNotes.map(\.title))")
+check("걸린 태그를 알려줌", store.activeTags == ["정산"], "\(store.activeTags)")
 
-store.searchQuery = "회의"
-check("태그 필터와 검색이 함께 적용",
+store.searchQuery = "#정산 회의"
+check("태그와 글자를 함께 적용",
       store.filteredNotes.map(\.title) == ["회의록"], "\(store.filteredNotes.map(\.title))")
+
+store.searchQuery = "#정산 #검토"
+check("태그 두 개는 둘 다 만족해야",
+      store.filteredNotes.map(\.title) == ["정산 노트"], "\(store.filteredNotes.map(\.title))")
+
 store.searchQuery = ""
-
-store.toggleTag("정산")
-check("같은 태그를 다시 누르면 해제", store.selectedTag == nil && store.filteredNotes.count == 3,
-      "\(store.selectedTag ?? "nil") / \(store.filteredNotes.count)")
-
 store.toggleTag("검토")
-check("다른 태그로 전환", store.filteredNotes.map(\.title) == ["정산 노트"], "\(store.filteredNotes.map(\.title))")
+check("태그를 누르면 검색창에 들어감", store.searchQuery == "#검토", store.searchQuery)
+check("그 태그로 걸러짐", store.filteredNotes.map(\.title) == ["정산 노트"],
+      "\(store.filteredNotes.map(\.title))")
+store.toggleTag("검토")
+check("다시 누르면 풀림", store.searchQuery.isEmpty && store.filteredNotes.count == 3,
+      "'\(store.searchQuery)' / \(store.filteredNotes.count)")
 
 // 외부에서 내용이 바뀌면 태그 캐시도 갱신되어야 한다
-store.toggleTag("검토")
 try! "# 잡담\n\n이제 #검토 대상".write(to: folder.appendingPathComponent("잡담.md"), atomically: true, encoding: .utf8)
-pump(1.5)
-store.toggleTag("검토")
+RunLoop.main.run(until: Date().addingTimeInterval(1.5))
+store.searchQuery = "#검토"
 check("외부 수정 후 태그 갱신",
       Set(store.filteredNotes.map(\.title)) == ["정산 노트", "잡담"], "\(store.filteredNotes.map(\.title))")
+store.searchQuery = ""
 
 // MARK: - E. 프리뷰에서의 태그 표시
 

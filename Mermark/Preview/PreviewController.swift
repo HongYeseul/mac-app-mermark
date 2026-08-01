@@ -44,9 +44,9 @@ final class PreviewController: NSObject, ObservableObject, WKNavigationDelegate,
     }
 
     /// 상대경로 이미지를 노트 위치 기준으로 풀 수 있게 현재 노트와 노트 폴더를 알려준다
-    func setLocation(noteURL: URL?, folderURL: URL?) {
+    func setLocation(noteURL: URL?, rootURL: URL?) {
         resourceHandler.noteDirectory = noteURL?.deletingLastPathComponent()
-        resourceHandler.rootDirectory = folderURL
+        resourceHandler.rootDirectory = rootURL
     }
 
     // mermaid 재렌더 비용이 있어 타이핑 중에는 디바운스

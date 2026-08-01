@@ -15,13 +15,16 @@ struct MermarkApp: App {
         }
         .commands {
             CommandGroup(replacing: .newItem) {
-                Button("새 노트") { store.createNoteChoosingFolderIfNeeded() }
+                Button("새 노트") { store.createNoteChoosingWorkspaceIfNeeded() }
                     .keyboardShortcut("n", modifiers: .command)
-                Button("노트 폴더 열기…") { store.chooseFolder() }
+                Button("작업 공간 연결…") { store.connectWorkspace() }
                     .keyboardShortcut("o", modifiers: .command)
-                Button("노트 폴더를 Finder에서 보기") { store.revealFolderInFinder() }
-                    .keyboardShortcut("r", modifiers: [.command, .shift])
-                    .disabled(store.folderURL == nil)
+                Menu("작업 공간을 Finder에서 보기") {
+                    ForEach(store.workspaces) { workspace in
+                        Button(workspace.name) { store.revealInFinder(workspace.url) }
+                    }
+                }
+                .disabled(store.workspaces.isEmpty)
             }
             CommandGroup(after: .saveItem) {
                 Button("모든 다이어그램 내보내기…") { exportAllDiagrams() }

@@ -46,7 +46,7 @@ defer { try? fm.removeItem(at: rootDir) }
 
 try! "# 기존 노트\n본문".write(to: rootDir.appendingPathComponent("기존 노트.md"), atomically: true, encoding: .utf8)
 try! "not markdown".write(to: rootDir.appendingPathComponent("무시할파일.txt"), atomically: true, encoding: .utf8)
-UserDefaults.standard.set(rootDir.path, forKey: "notesFolderPath")
+UserDefaults.standard.set([rootDir.path], forKey: "workspacePaths")
 
 let store = NoteStore()
 pump(0.5)
@@ -178,10 +178,10 @@ check("외부 수정 후 검색 결과 갱신", searchStore.filteredNotes.contai
 // MARK: - F. 노트 폴더가 없을 때
 
 print("\n── F. 노트 폴더가 없을 때")
-UserDefaults.standard.removeObject(forKey: "notesFolderPath")
+UserDefaults.standard.removeObject(forKey: "workspacePaths")
 let emptyStore = NoteStore()
 pump(0.3)
-check("폴더가 없으면 목록도 비어 있음", emptyStore.notes.isEmpty && emptyStore.folderURL == nil,
+check("폴더가 없으면 목록도 비어 있음", emptyStore.notes.isEmpty && emptyStore.workspaces.isEmpty,
       "\(emptyStore.notes.count)개")
 emptyStore.createNote()
 check("폴더가 없으면 새 노트를 만들지 않고 조용히 넘어감",
@@ -189,7 +189,7 @@ check("폴더가 없으면 새 노트를 만들지 않고 조용히 넘어감",
       "\(emptyStore.selectedNoteURL?.lastPathComponent ?? "nil")")
 
 // 폴더가 생기면 곧바로 만들 수 있어야 한다
-UserDefaults.standard.set(rootDir.path, forKey: "notesFolderPath")
+UserDefaults.standard.set([rootDir.path], forKey: "workspacePaths")
 let readyStore = NoteStore()
 pump(0.3)
 let beforeCount = readyStore.notes.count
@@ -208,27 +208,27 @@ try! fm.createDirectory(at: goneDir, withIntermediateDirectories: true)
 try! "# 노트".write(to: goneDir.appendingPathComponent("노트.md"), atomically: true, encoding: .utf8)
 
 // 1) 시작할 때 저장된 경로가 없으면 사정을 알린다
-UserDefaults.standard.set(goneDir.path + "-없는경로", forKey: "notesFolderPath")
+UserDefaults.standard.set([goneDir.path + "-없는경로"], forKey: "workspacePaths")
 let missingStore = NoteStore()
 pump(0.3)
-check("없는 경로면 폴더를 열지 않음", missingStore.folderURL == nil)
+check("없는 경로면 폴더를 열지 않음", missingStore.workspaces.isEmpty)
 check("없는 경로를 알려줌", missingStore.unavailableFolderPath == goneDir.path + "-없는경로",
       missingStore.unavailableFolderPath ?? "nil")
 
 // 2) 폴더가 아니라 파일을 가리켜도 마찬가지
 let filePath = goneDir.appendingPathComponent("노트.md").path
-UserDefaults.standard.set(filePath, forKey: "notesFolderPath")
+UserDefaults.standard.set([filePath], forKey: "workspacePaths")
 let filePointingStore = NoteStore()
 pump(0.3)
-check("폴더가 아닌 경로도 걸러냄", filePointingStore.folderURL == nil
+check("폴더가 아닌 경로도 걸러냄", filePointingStore.workspaces.isEmpty
       && filePointingStore.unavailableFolderPath == filePath,
       filePointingStore.unavailableFolderPath ?? "nil")
 
 // 3) 정상 폴더면 안내를 띄우지 않는다
-UserDefaults.standard.set(goneDir.path, forKey: "notesFolderPath")
+UserDefaults.standard.set([goneDir.path], forKey: "workspacePaths")
 let liveStore = NoteStore()
 pump(0.4)
-check("정상 폴더면 안내 없음", liveStore.folderURL != nil && liveStore.unavailableFolderPath == nil,
+check("정상 폴더면 안내 없음", !liveStore.workspaces.isEmpty && liveStore.unavailableFolderPath == nil,
       liveStore.unavailableFolderPath ?? "nil")
 check("노트도 정상적으로 읽힘", liveStore.notes.count == 1, "\(liveStore.notes.count)")
 
@@ -239,7 +239,7 @@ pump(2.0)
 check("사용 중 폴더가 사라지면 알아챔", liveStore.unavailableFolderPath == goneDir.path,
       liveStore.unavailableFolderPath ?? "nil")
 check("목록과 선택을 비움",
-      liveStore.notes.isEmpty && liveStore.selectedNoteURL == nil && liveStore.folderURL == nil,
+      liveStore.notes.isEmpty && liveStore.selectedNoteURL == nil && liveStore.workspaces.isEmpty,
       "노트 \(liveStore.notes.count)개")
 pump(1.0)
 check("대기 중이던 저장이 폴더를 되살리지 않음", !fm.fileExists(atPath: goneDir.path))
@@ -247,96 +247,108 @@ check("대기 중이던 저장이 폴더를 되살리지 않음", !fm.fileExists
 // MARK: - H. 작업 폴더 위치 보여주기
 
 print("\n── H. 작업 폴더 위치")
-UserDefaults.standard.set(rootDir.path, forKey: "notesFolderPath")
+UserDefaults.standard.set([rootDir.path], forKey: "workspacePaths")
 let pathStore = NoteStore()
 pump(0.3)
-check("폴더 경로를 알려줌", pathStore.folderDisplayPath != nil)
+check("작업 공간 경로를 알려줌", pathStore.workspaces.first?.displayPath != nil)
 check("경로가 실제 폴더를 가리킴",
-      pathStore.folderDisplayPath?.hasSuffix(rootDir.lastPathComponent) == true,
-      pathStore.folderDisplayPath ?? "nil")
+      pathStore.workspaces.first?.displayPath.hasSuffix(rootDir.lastPathComponent) == true,
+      pathStore.workspaces.first?.displayPath ?? "nil")
 
 // 홈 아래 경로는 ~ 로 줄여 창 부제가 길어지지 않게 한다
 let home = FileManager.default.homeDirectoryForCurrentUser
 let underHome = home.appendingPathComponent("mermark-경로표시-\(ProcessInfo.processInfo.processIdentifier)")
 try! fm.createDirectory(at: underHome, withIntermediateDirectories: true)
 defer { try? fm.removeItem(at: underHome) }
-UserDefaults.standard.set(underHome.path, forKey: "notesFolderPath")
+UserDefaults.standard.set([underHome.path], forKey: "workspacePaths")
 let homeStore = NoteStore()
 pump(0.3)
-check("홈 아래 경로는 ~ 로 줄임", homeStore.folderDisplayPath?.hasPrefix("~/") == true,
-      homeStore.folderDisplayPath ?? "nil")
+check("홈 아래 경로는 ~ 로 줄임", homeStore.workspaces.first?.displayPath.hasPrefix("~/") == true,
+      homeStore.workspaces.first?.displayPath ?? "nil")
 check("줄인 경로에도 폴더 이름이 남음",
-      homeStore.folderDisplayPath?.contains("mermark-경로표시") == true,
-      homeStore.folderDisplayPath ?? "nil")
+      homeStore.workspaces.first?.displayPath.contains("mermark-경로표시") == true,
+      homeStore.workspaces.first?.displayPath ?? "nil")
 
-UserDefaults.standard.removeObject(forKey: "notesFolderPath")
+UserDefaults.standard.removeObject(forKey: "workspacePaths")
 let noFolderStore = NoteStore()
 pump(0.2)
-check("폴더가 없으면 경로도 없음", noFolderStore.folderDisplayPath == nil,
-      noFolderStore.folderDisplayPath ?? "nil")
+check("작업 공간이 없으면 경로도 없음", noFolderStore.workspaces.isEmpty,
+      "\(noFolderStore.workspaces.count)")
 
-// MARK: - I. 최근 폴더
+// MARK: - I. 여러 작업 공간
 
-print("\n── I. 최근 폴더")
+print("\n── I. 여러 작업 공간")
 UserDefaults.standard.removeObject(forKey: "recentFolderPaths")
-UserDefaults.standard.removeObject(forKey: "notesFolderPath")
+UserDefaults.standard.removeObject(forKey: "workspacePaths")
 
-let folderA = rootDir.appendingPathComponent("폴더A")
-let folderB = rootDir.appendingPathComponent("폴더B")
-let folderC = rootDir.appendingPathComponent("폴더C")
-for folder in [folderA, folderB, folderC] {
-    try! fm.createDirectory(at: folder, withIntermediateDirectories: true)
-    try! "# 노트".write(to: folder.appendingPathComponent("노트.md"), atomically: true, encoding: .utf8)
-}
+let spaceA = rootDir.appendingPathComponent("작업공간A")
+let spaceB = rootDir.appendingPathComponent("작업공간B")
+let nested = spaceA.appendingPathComponent("하위/더깊은")
+try! fm.createDirectory(at: nested, withIntermediateDirectories: true)
+try! fm.createDirectory(at: spaceB, withIntermediateDirectories: true)
+try! "# A 최상위".write(to: spaceA.appendingPathComponent("A최상위.md"), atomically: true, encoding: .utf8)
+try! "# A 하위".write(to: nested.appendingPathComponent("A하위.md"), atomically: true, encoding: .utf8)
+try! "# B 노트".write(to: spaceB.appendingPathComponent("B노트.md"), atomically: true, encoding: .utf8)
 
-UserDefaults.standard.set(folderA.path, forKey: "notesFolderPath")
-let recentStore = NoteStore()
-pump(0.4)
-check("연 폴더가 최근 목록에 들어감",
-      recentStore.recentFolders.first?.lastPathComponent == "폴더A",
-      "\(recentStore.recentFolders.map(\.lastPathComponent))")
-
-recentStore.openRecentFolder(folderB)
-pump(0.4)
-check("최근 목록에서 고르면 그 폴더가 열림",
-      recentStore.folderURL?.lastPathComponent == "폴더B",
-      recentStore.folderURL?.lastPathComponent ?? "nil")
-check("최근에 연 것이 앞으로 옴",
-      recentStore.recentFolders.map(\.lastPathComponent) == ["폴더B", "폴더A"],
-      "\(recentStore.recentFolders.map(\.lastPathComponent))")
-check("폴더를 바꾸면 노트도 그 폴더 것",
-      recentStore.notes.count == 1, "\(recentStore.notes.count)")
-
-recentStore.openRecentFolder(folderC)
-recentStore.openRecentFolder(folderA)
-pump(0.4)
-check("같은 폴더가 중복으로 쌓이지 않음",
-      Set(recentStore.recentFolders.map(\.path)).count == recentStore.recentFolders.count,
-      "\(recentStore.recentFolders.map(\.lastPathComponent))")
-check("가장 최근이 맨 앞",
-      recentStore.recentFolders.first?.lastPathComponent == "폴더A",
-      "\(recentStore.recentFolders.map(\.lastPathComponent))")
-
-// 폴더를 바꾸면 이전 폴더의 검색·태그 필터가 남아 있으면 안 된다
-recentStore.searchQuery = "노트"
-recentStore.toggleTag("아무거나")
-recentStore.openRecentFolder(folderB)
+let spaces = NoteStore()
 pump(0.3)
-check("폴더를 바꾸면 검색어·태그 필터가 초기화됨",
-      recentStore.searchQuery.isEmpty && recentStore.activeTags.isEmpty,
-      "검색 '\(recentStore.searchQuery)' / 태그 \(recentStore.activeTags)")
+check("처음엔 연결된 작업 공간 없음", spaces.workspaces.isEmpty)
 
-// 최근 목록에 있던 폴더가 지워졌으면
-try! fm.removeItem(at: folderC)
-let afterRemoval = NoteStore()
+spaces.addWorkspace(spaceA)
+pump(0.4)
+check("작업 공간 하나 연결", spaces.workspaces.count == 1, "\(spaces.workspaces.count)")
+check("하위 폴더의 노트까지 읽음", spaces.notes.count == 2, "\(spaces.notes.map(\.title))")
+let deepNote = spaces.notes.first { $0.title == "A하위" }
+check("하위 경로를 알려줌", deepNote?.subfolder == "하위/더깊은", deepNote?.subfolder ?? "nil")
+check("최상위 노트는 하위 경로 없음",
+      spaces.notes.first { $0.title == "A최상위" }?.subfolder == nil)
+
+spaces.addWorkspace(spaceB)
+pump(0.4)
+check("작업 공간 둘 연결", spaces.workspaces.count == 2, "\(spaces.workspaces.map(\.name))")
+check("두 공간의 노트가 모두 보임", spaces.notes.count == 3, "\(spaces.notes.map(\.title))")
+check("공간별로 나눠 볼 수 있음",
+      spaces.notes(in: spaces.workspaces[1]).map(\.title) == ["B노트"],
+      "\(spaces.notes(in: spaces.workspaces[1]).map(\.title))")
+
+spaces.addWorkspace(spaceA)
+check("같은 폴더를 두 번 연결하지 않음", spaces.workspaces.count == 2, "\(spaces.workspaces.count)")
+
+// 검색은 연결된 공간 전체를 훑는다
+spaces.searchQuery = "노트"
+check("검색이 여러 공간에 걸침", spaces.filteredNotes.contains { $0.title == "B노트" },
+      "\(spaces.filteredNotes.map(\.title))")
+spaces.searchQuery = ""
+
+// 지정한 공간에 새 노트를 만든다
+spaces.createNote(in: spaceB)
 pump(0.3)
-check("지워진 폴더는 최근 목록에서 빠짐",
-      !afterRemoval.recentFolders.contains { $0.lastPathComponent == "폴더C" },
-      "\(afterRemoval.recentFolders.map(\.lastPathComponent))")
+check("고른 공간에 새 노트가 생김",
+      fm.fileExists(atPath: spaceB.appendingPathComponent("새 노트.md").path))
+check("새 노트가 그 공간 소속으로 잡힘",
+      spaces.notes(in: spaces.workspaces[1]).contains { $0.title == "새 노트" },
+      "\(spaces.notes(in: spaces.workspaces[1]).map(\.title))")
 
-recentStore.openRecentFolder(folderC)
-check("없는 폴더를 고르면 안내로 넘어감", recentStore.unavailableFolderPath != nil,
-      recentStore.unavailableFolderPath ?? "nil")
+// 기본 공간은 지금 보고 있는 노트를 따라간다
+spaces.select(spaceB.appendingPathComponent("B노트.md"))
+check("보던 노트의 공간이 기본이 됨", spaces.defaultWorkspace?.url == spaceB.standardizedFileURL,
+      spaces.defaultWorkspace?.name ?? "nil")
+
+spaces.disconnectWorkspace(spaces.workspaces[1])
+pump(0.4)
+check("연결 해제하면 목록에서 빠짐", spaces.workspaces.count == 1, "\(spaces.workspaces.map(\.name))")
+check("해제한 공간의 노트도 사라짐", !spaces.notes.contains { $0.title == "B노트" },
+      "\(spaces.notes.map(\.title))")
+check("해제한 공간의 노트를 보고 있었으면 선택이 풀림", spaces.selectedNoteURL == nil,
+      spaces.selectedNoteURL?.lastPathComponent ?? "nil")
+check("파일 자체는 지우지 않음",
+      fm.fileExists(atPath: spaceB.appendingPathComponent("B노트.md").path))
+
+// 하위 폴더에서 외부로 파일을 추가해도 잡아낸다
+try! "# 나중에 추가".write(to: nested.appendingPathComponent("나중.md"), atomically: true, encoding: .utf8)
+pump(1.5)
+check("하위 폴더의 외부 추가도 감지", spaces.notes.contains { $0.title == "나중" },
+      "\(spaces.notes.map(\.title))")
 
 print("\n" + (failures.isEmpty ? "ALL PASS (\(total) checks)" : "FAILURES(\(failures.count)/\(total)): \(failures.joined(separator: ", "))"))
 try? fm.removeItem(at: rootDir)

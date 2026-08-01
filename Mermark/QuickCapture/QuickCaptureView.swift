@@ -33,8 +33,8 @@ struct QuickCaptureView: View {
                 Text("\(savedName) 으로 저장했습니다")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-            } else if store.folderURL == nil {
-                Text("먼저 노트 폴더를 선택하세요")
+            } else if store.workspaces.isEmpty {
+                Text("먼저 작업 공간을 연결하세요")
                     .font(.caption)
                     .foregroundStyle(.orange)
             }
@@ -47,7 +47,7 @@ struct QuickCaptureView: View {
                 Button("저장") { save() }
                     .keyboardShortcut(.return, modifiers: .command)
                     .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                              || store.folderURL == nil)
+                              || store.workspaces.isEmpty)
             }
         }
         .padding(12)

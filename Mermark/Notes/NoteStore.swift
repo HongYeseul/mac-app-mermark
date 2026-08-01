@@ -1,18 +1,38 @@
 import AppKit
 import Foundation
 
+/// 연결해 둔 작업 공간(폴더). 하위 폴더를 가질 수 있다.
+struct Workspace: Identifiable, Hashable {
+    let url: URL
+    var id: URL { url }
+    var name: String { url.lastPathComponent }
+    var displayPath: String { (url.path as NSString).abbreviatingWithTildeInPath }
+}
+
 struct Note: Identifiable, Hashable {
     let url: URL
+    /// 어느 작업 공간에 속한 노트인지
+    let workspaceURL: URL
     let modifiedAt: Date
 
     var id: URL { url }
     var title: String { url.deletingPathExtension().lastPathComponent }
+
+    /// 작업 공간 기준 하위 폴더 (최상위면 nil)
+    var subfolder: String? {
+        let base = workspaceURL.standardizedFileURL.path
+        let full = url.standardizedFileURL.deletingLastPathComponent().path
+        guard full.hasPrefix(base) else { return nil }
+        let relative = String(full.dropFirst(base.count)).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        return relative.isEmpty ? nil : relative
+    }
 }
 
 /// 노트 폴더 상태: 폴더 선택, 노트 목록, 선택된 노트 로드/자동 저장,
 /// 첫 줄 기준 파일명 동기화, FSEvents 외부 변경 감지
 final class NoteStore: ObservableObject {
-    @Published var folderURL: URL?
+    /// 연결해 둔 작업 공간들. 여러 개를 동시에 열어 둘 수 있다.
+    @Published private(set) var workspaces: [Workspace] = []
     @Published var notes: [Note] = []
     @Published var selectedNoteURL: URL?
     @Published var currentText: String = ""
@@ -29,7 +49,7 @@ final class NoteStore: ObservableObject {
 
     private var saveWorkItem: DispatchWorkItem?
     private var eventStream: FSEventStreamRef?
-    private let folderPathKey = "notesFolderPath"
+    private let workspacePathsKey = "workspacePaths"
     /// 파일명이 첫 줄과 이미 일치하는 노트만 이름을 따라가게 한다.
     /// 다른 앱에서 만든 "파일명 ≠ 제목" 노트를 앱이 멋대로 개명하지 않기 위한 안전장치.
     private var tracksFilename = false
@@ -40,13 +60,19 @@ final class NoteStore: ObservableObject {
 
     init() {
         loadRecentFolders()
-        if let path = UserDefaults.standard.string(forKey: folderPathKey) {
-            if isUsableFolder(path) {
-                openFolder(URL(fileURLWithPath: path))
-            } else {
-                // 폴더가 옮겨지거나 지워진 경우. 빈 화면만 두면 무엇이 잘못됐는지 알 수 없다.
-                unavailableFolderPath = path
-            }
+
+        let saved = UserDefaults.standard.stringArray(forKey: workspacePathsKey) ?? []
+        let usable = saved.filter { isUsableFolder($0) }
+        // 옮겨지거나 지워진 작업 공간이 있으면 알린다. 빈 화면만 두면 무엇이 잘못됐는지 알 수 없다.
+        if let missing = saved.first(where: { !isUsableFolder($0) }) {
+            unavailableFolderPath = missing
+        }
+        workspaces = usable.map { Workspace(url: URL(fileURLWithPath: $0).standardizedFileURL) }
+        if !workspaces.isEmpty {
+            persistWorkspaces()
+            reloadNotes()
+            select(notes.first?.url)
+            startWatching()
         }
 
         // 앱 비활성화/종료 시 대기 중인 자동 저장을 즉시 반영 (PLAN.md 4: 포커스 아웃 시 저장)
@@ -62,23 +88,79 @@ final class NoteStore: ObservableObject {
         stopWatching()
     }
 
-    // MARK: - 노트 폴더
+    // MARK: - 작업 공간
 
-    func chooseFolder() {
+    /// 작업 공간을 하나 더 연결한다. 이미 있는 폴더면 아무 일도 하지 않는다.
+    func connectWorkspace() {
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.canCreateDirectories = true
-        panel.prompt = "이 폴더 사용"
-        panel.message = "노트를 모아둘 폴더를 선택하세요"
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        UserDefaults.standard.set(url.path, forKey: folderPathKey)
-        selectedNoteURL = nil
-        unavailableFolderPath = nil
-        openFolder(url)
+        panel.allowsMultipleSelection = true
+        panel.prompt = "작업 공간으로 연결"
+        panel.message = "노트를 모아둘 폴더를 고르세요. 하위 폴더도 함께 읽습니다."
+        guard panel.runModal() == .OK else { return }
+        for url in panel.urls { addWorkspace(url) }
     }
 
-    /// 최근에 연 노트 폴더. 최근 것이 앞. 지금 열려 있는 폴더도 첫 번째로 들어간다.
+    @discardableResult
+    func addWorkspace(_ url: URL) -> Bool {
+        let standardized = url.standardizedFileURL
+        guard isUsableFolder(standardized.path) else {
+            unavailableFolderPath = standardized.path
+            return false
+        }
+        guard !workspaces.contains(where: { $0.url == standardized }) else { return false }
+
+        unavailableFolderPath = nil
+        workspaces.append(Workspace(url: standardized))
+        rememberRecentFolder(standardized)
+        persistWorkspaces()
+        reloadNotes()
+        if selectedNoteURL == nil { select(notes.first?.url) }
+        startWatching()
+        return true
+    }
+
+    func disconnectWorkspace(_ workspace: Workspace) {
+        workspaces.removeAll { $0.url == workspace.url }
+        persistWorkspaces()
+
+        // 지금 보던 노트가 끊긴 작업 공간 것이면 선택을 비운다
+        if let selected = selectedNoteURL, isInside(selected, workspace.url) {
+            flushPendingSave()
+            selectedNoteURL = nil
+            currentText = ""
+        }
+        reloadNotes()
+        startWatching()
+    }
+
+    private func persistWorkspaces() {
+        UserDefaults.standard.set(workspaces.map(\.url.path), forKey: workspacePathsKey)
+    }
+
+    private func isInside(_ url: URL, _ folder: URL) -> Bool {
+        let base = folder.standardizedFileURL.path
+        return url.standardizedFileURL.path.hasPrefix(base + "/")
+    }
+
+    /// 그 노트가 속한 작업 공간. 프리뷰가 "/"로 시작하는 이미지 경로를 풀 때 기준이 된다.
+    func workspaceURL(for noteURL: URL?) -> URL? {
+        guard let noteURL else { return nil }
+        return workspaces.first { isInside(noteURL, $0.url) }?.url
+    }
+
+    /// 새 노트·빠른 메모가 기본으로 들어갈 작업 공간
+    var defaultWorkspace: Workspace? {
+        if let selected = selectedNoteURL,
+           let owner = workspaces.first(where: { isInside(selected, $0.url) }) {
+            return owner        // 지금 보던 노트와 같은 곳에 만드는 게 자연스럽다
+        }
+        return workspaces.first
+    }
+
+    /// 최근에 연 폴더. 최근 것이 앞.
     @Published private(set) var recentFolders: [URL] = []
 
     private let recentFoldersKey = "recentFolderPaths"
@@ -86,7 +168,6 @@ final class NoteStore: ObservableObject {
 
     private func loadRecentFolders() {
         let paths = UserDefaults.standard.stringArray(forKey: recentFoldersKey) ?? []
-        // 그 사이 지워진 폴더는 목록에서 뺀다
         recentFolders = paths.filter { isUsableFolder($0) }.map { URL(fileURLWithPath: $0) }
     }
 
@@ -100,33 +181,8 @@ final class NoteStore: ObservableObject {
         loadRecentFolders()
     }
 
-    /// 최근 목록에서 골라 연다
-    func openRecentFolder(_ url: URL) {
-        guard isUsableFolder(url.path) else {
-            unavailableFolderPath = url.path
-            return
-        }
-        UserDefaults.standard.set(url.path, forKey: folderPathKey)
-        selectedNoteURL = nil
-        searchQuery = ""
-        searchQuery = ""
-        openFolder(url)
-    }
-
-    /// 창 부제로 보여줄 노트 폴더 경로. 홈 아래면 `~`로 줄인다.
-    var folderDisplayPath: String? {
-        guard let folderURL else { return nil }
-        return (folderURL.path as NSString).abbreviatingWithTildeInPath
-    }
-
     func revealInFinder(_ url: URL) {
         NSWorkspace.shared.activateFileViewerSelecting([url])
-    }
-
-    /// 노트 폴더 자체를 Finder에서 연다
-    func revealFolderInFinder() {
-        guard let folderURL else { return }
-        NSWorkspace.shared.activateFileViewerSelecting([folderURL])
     }
 
     private func isUsableFolder(_ path: String) -> Bool {
@@ -135,42 +191,40 @@ final class NoteStore: ObservableObject {
             && isDirectory.boolValue
     }
 
-    private func openFolder(_ url: URL) {
-        unavailableFolderPath = nil
-        folderURL = url.standardizedFileURL
-        rememberRecentFolder(url)
-        reloadNotes()
-        if selectedNoteURL == nil {
-            select(notes.first?.url)
-        }
-        startWatching(url)
-    }
-
+    /// 작업 공간마다 하위 폴더까지 훑어 .md를 모은다
     private func reloadNotes() {
-        guard let folderURL else {
-            notes = []
-            return
+        var collected: [Note] = []
+        for workspace in workspaces {
+            collected.append(contentsOf: scanNotes(in: workspace))
         }
-        let urls = (try? FileManager.default.contentsOfDirectory(
-            at: folderURL,
-            includingPropertiesForKeys: [.contentModificationDateKey],
-            options: [.skipsHiddenFiles]
-        )) ?? []
-
-        notes = urls
-            .filter { $0.pathExtension.lowercased() == "md" }
-            // 목록은 /private/var, 직접 만든 URL은 /var 형태로 나와 == 비교가 어긋난다.
-            // 표기를 맞춰야 이름 변경 후에도 사이드바 선택이 유지된다.
-            .map { $0.standardizedFileURL }
-            .map { url in
-                let modifiedAt = (try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
-                return Note(url: url, modifiedAt: modifiedAt)
-            }
-            .sorted { $0.modifiedAt > $1.modifiedAt }
+        notes = collected.sorted { $0.modifiedAt > $1.modifiedAt }
 
         let alive = Set(notes.map(\.url))
         contentCache = contentCache.filter { alive.contains($0.key) }
         tagCache = tagCache.filter { alive.contains($0.key) }
+    }
+
+    private func scanNotes(in workspace: Workspace) -> [Note] {
+        let manager = FileManager.default
+        guard let walker = manager.enumerator(
+            at: workspace.url,
+            includingPropertiesForKeys: [.contentModificationDateKey, .isDirectoryKey],
+            options: [.skipsHiddenFiles, .skipsPackageDescendants]
+        ) else { return [] }
+
+        var found: [Note] = []
+        for case let url as URL in walker where url.pathExtension.lowercased() == "md" {
+            let standardized = url.standardizedFileURL
+            let modifiedAt = (try? standardized.resourceValues(forKeys: [.contentModificationDateKey])
+                .contentModificationDate) ?? .distantPast
+            found.append(Note(url: standardized, workspaceURL: workspace.url, modifiedAt: modifiedAt))
+        }
+        return found
+    }
+
+    /// 사이드바에서 작업 공간별로 묶어 보여주기 위한 목록
+    func notes(in workspace: Workspace) -> [Note] {
+        filteredNotes.filter { $0.workspaceURL == workspace.url }
     }
 
     /// 노트 폴더 전체의 태그를 많이 쓰인 순으로
@@ -274,15 +328,17 @@ final class NoteStore: ObservableObject {
     }
 
     /// Cmd+N: 제목 입력 없이 빈 노트를 만들고 바로 타이핑할 수 있게 선택 + 포커스 (PLAN.md 4)
-    /// 메뉴·툴바에서 부르는 새 노트. 노트 폴더가 없으면 먼저 고르게 한다.
-    /// 폴더가 없다고 아무 반응이 없으면 기능이 막힌 것처럼 보인다.
-    func createNoteChoosingFolderIfNeeded() {
-        if folderURL == nil { chooseFolder() }
+    /// 메뉴·툴바에서 부르는 새 노트. 연결된 작업 공간이 없으면 먼저 고르게 한다.
+    /// 아무 반응이 없으면 기능이 막힌 것처럼 보인다.
+    func createNoteChoosingWorkspaceIfNeeded() {
+        if workspaces.isEmpty { connectWorkspace() }
         createNote()
     }
 
-    func createNote() {
-        guard folderURL != nil, let url = uniqueURL(for: Self.untitledName, excluding: nil) else { return }
+    /// 어디에 만들지 지정하지 않으면 기본 작업 공간에 만든다
+    func createNote(in folder: URL? = nil) {
+        let target = folder ?? defaultWorkspace?.url
+        guard let target, let url = uniqueURL(for: Self.untitledName, in: target, excluding: nil) else { return }
         flushPendingSave()
         do {
             try "".write(to: url, atomically: true, encoding: .utf8)
@@ -302,8 +358,8 @@ final class NoteStore: ObservableObject {
     @discardableResult
     func quickCapture(_ text: String, at timestamp: Date = Date()) -> URL? {
         let body = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !body.isEmpty, folderURL != nil,
-              let url = uniqueURL(for: Self.captureName(for: timestamp), excluding: nil) else { return nil }
+        guard !body.isEmpty, let target = defaultWorkspace?.url,
+              let url = uniqueURL(for: Self.captureName(for: timestamp), in: target, excluding: nil) else { return nil }
         do {
             try body.write(to: url, atomically: true, encoding: .utf8)
         } catch {
@@ -376,7 +432,7 @@ final class NoteStore: ObservableObject {
         guard tracksFilename else { return }
         let desired = Self.fileTitle(from: currentText)
         guard desired != url.deletingPathExtension().lastPathComponent,
-              let target = uniqueURL(for: desired, excluding: url),
+              let target = uniqueURL(for: desired, in: url.deletingLastPathComponent(), excluding: url),
               target != url else { return }
         do {
             try FileManager.default.moveItem(at: url, to: target)
@@ -388,14 +444,13 @@ final class NoteStore: ObservableObject {
     }
 
     /// 같은 제목이 이미 있으면 "제목 2", "제목 3"으로 비켜 간다. (대소문자 무시 파일시스템 고려)
-    private func uniqueURL(for title: String, excluding current: URL?) -> URL? {
-        guard let folderURL else { return nil }
+    private func uniqueURL(for title: String, in folder: URL, excluding current: URL?) -> URL? {
         let fm = FileManager.default
-        var candidate = folderURL.appendingPathComponent(title + ".md")
+        var candidate = folder.appendingPathComponent(title + ".md")
         var suffix = 2
         while fm.fileExists(atPath: candidate.path),
               candidate.path.lowercased() != current?.path.lowercased() {
-            candidate = folderURL.appendingPathComponent("\(title) \(suffix).md")
+            candidate = folder.appendingPathComponent("\(title) \(suffix).md")
             suffix += 1
         }
         return candidate
@@ -403,8 +458,9 @@ final class NoteStore: ObservableObject {
 
     // MARK: - FSEvents 외부 변경 감지
 
-    private func startWatching(_ url: URL) {
+    private func startWatching() {
         stopWatching()
+        guard !workspaces.isEmpty else { return }
         var context = FSEventStreamContext(
             version: 0,
             info: Unmanaged.passUnretained(self).toOpaque(),
@@ -416,7 +472,7 @@ final class NoteStore: ObservableObject {
         }
         guard let stream = FSEventStreamCreate(
             kCFAllocatorDefault, callback, &context,
-            [url.path] as CFArray,
+            workspaces.map(\.url.path) as CFArray,
             FSEventStreamEventId(kFSEventStreamEventIdSinceNow),
             0.3,
             FSEventStreamCreateFlags(kFSEventStreamCreateFlagFileEvents | kFSEventStreamCreateFlagNoDefer)
@@ -426,22 +482,22 @@ final class NoteStore: ObservableObject {
         eventStream = stream
     }
 
-    private func markFolderUnavailable() {
+    private func markWorkspaceUnavailable(_ missing: URL) {
         // 대기 중인 저장이 사라진 폴더에 파일을 되살리지 않도록 먼저 취소한다
         saveWorkItem?.cancel()
         saveWorkItem = nil
 
-        unavailableFolderPath = folderURL?.path
-        folderURL = nil
-        notes = []
-        selectedNoteURL = nil
-        currentText = ""
-        searchQuery = ""
-        contentCache = [:]
-        tagCache = [:]
+        unavailableFolderPath = missing.path
+        workspaces.removeAll { $0.url == missing }
+        persistWorkspaces()
+        reloadNotes()
 
-        // FSEvents 콜백 안에서 스트림을 정리하지 않도록 한 번 미룬다
-        DispatchQueue.main.async { [weak self] in self?.stopWatching() }
+        if let selected = selectedNoteURL, !FileManager.default.fileExists(atPath: selected.path) {
+            selectedNoteURL = nil
+            currentText = ""
+        }
+        // FSEvents 콜백 안에서 스트림을 갈아끼우지 않도록 한 번 미룬다
+        DispatchQueue.main.async { [weak self] in self?.startWatching() }
     }
 
     private func stopWatching() {
@@ -455,8 +511,8 @@ final class NoteStore: ObservableObject {
     /// 우리 저장도 이벤트를 만들기 때문에, 디스크 내용이 실제로 다를 때만 반영해 되돌림 루프를 막는다.
     private func handleExternalChange() {
         // 노트 폴더 자체가 없어졌으면 목록만 비우지 말고 사정을 알린다
-        if let folderURL, !isUsableFolder(folderURL.path) {
-            markFolderUnavailable()
+        if let missing = workspaces.first(where: { !isUsableFolder($0.url.path) }) {
+            markWorkspaceUnavailable(missing.url)
             return
         }
 

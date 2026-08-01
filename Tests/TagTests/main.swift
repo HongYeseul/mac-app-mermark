@@ -132,7 +132,7 @@ try! "# 정산 노트\n\n#정산 #검토".write(to: folder.appendingPathComponen
 try! "---\ntags:\n  - 정산\n---\n\n# 회의록".write(to: folder.appendingPathComponent("회의록.md"), atomically: true, encoding: .utf8)
 try! "# 잡담\n\n태그 없음".write(to: folder.appendingPathComponent("잡담.md"), atomically: true, encoding: .utf8)
 
-UserDefaults.standard.set(folder.path, forKey: "notesFolderPath")
+UserDefaults.standard.set([folder.path], forKey: "workspacePaths")
 let store = NoteStore()
 RunLoop.main.run(until: Date().addingTimeInterval(0.5))
 

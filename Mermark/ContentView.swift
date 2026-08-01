@@ -30,6 +30,8 @@ struct ContentView: View {
     @AppStorage("showsOutline") private var showsOutline = false
     /// 테마가 바뀔 때 화면을 다시 그리기 위한 값
     @State private var themeRevision = 0
+    /// 접어둔 작업 공간
+    @State private var collapsedWorkspaces: Set<URL> = []
 
     private var headings: [Heading] {
         MarkdownOutline.headings(in: store.currentText)
@@ -38,21 +40,18 @@ struct ContentView: View {
     var body: some View {
         NavigationSplitView {
             List(selection: selectionBinding) {
-                Section("노트") {
-                    ForEach(store.filteredNotes) { note in
-                        Label(note.title, systemImage: "doc.text")
-                            .tag(note.url)
-                            .contextMenu {
-                                Button("Finder에서 보기") { store.revealInFinder(note.url) }
-                                Button("경로 복사") { copyPath(note.url) }
-                                Divider()
-                                Button("노트 폴더를 Finder에서 보기") { store.revealFolderInFinder() }
-                            }
+                ForEach(store.workspaces) { workspace in
+                    Section(isExpanded: expansionBinding(for: workspace)) {
+                        ForEach(store.notes(in: workspace)) { note in
+                            noteRow(note)
+                        }
+                    } header: {
+                        workspaceHeader(workspace)
                     }
                 }
             }
             .searchable(text: $store.searchQuery, placement: .sidebar, prompt: "제목·본문 검색")
-            .safeAreaInset(edge: .top, spacing: 0) { folderSwitcher }
+            .safeAreaInset(edge: .top, spacing: 0) { workspaceBar }
             .navigationSplitViewColumnWidth(min: 200, ideal: 240)
         } detail: {
             detail
@@ -60,18 +59,18 @@ struct ContentView: View {
                 .toolbar {
                     ToolbarItemGroup(placement: .navigation) {
                         Button {
-                            store.createNoteChoosingFolderIfNeeded()
+                            store.createNoteChoosingWorkspaceIfNeeded()
                         } label: {
                             Image(systemName: "square.and.pencil")
                         }
                         .help("새 노트 (⌘N)")
 
                         Button {
-                            store.chooseFolder()
+                            store.connectWorkspace()
                         } label: {
-                            Image(systemName: "folder")
+                            Image(systemName: "plus.rectangle.on.folder")
                         }
-                        .help("노트 폴더 선택 (⌘O)")
+                        .help("작업 공간 연결 (⌘O)")
                     }
 
                     ToolbarItemGroup(placement: .primaryAction) {
@@ -92,9 +91,9 @@ struct ContentView: View {
                     }
                 }
         }
-        .navigationTitle(store.folderURL?.lastPathComponent ?? "Mermark")
+        .navigationTitle(store.workspaces.count == 1 ? store.workspaces[0].name : "Mermark")
         // 작업 폴더를 바꿀 수 있으니 지금 어디를 쓰는지 항상 보이게 한다
-        .navigationSubtitle(store.folderDisplayPath ?? "")
+        .navigationSubtitle(store.workspaces.count == 1 ? store.workspaces[0].displayPath : "")
         // 선택 강조·세그먼트 등 시스템 컨트롤까지 메인 색상을 따르게 한다
         .tint(Brand.accent)
         .inspector(isPresented: $showsOutline) {
@@ -117,42 +116,98 @@ struct ContentView: View {
         pasteboard.setString(url.path, forType: .string)
     }
 
-    /// 검색창 바로 아래에서 지금 폴더를 보여주고, 눌러서 최근 폴더로 바로 옮겨간다
-    private var folderSwitcher: some View {
-        Menu {
-            let others = store.recentFolders.filter { $0 != store.folderURL }
-            if !others.isEmpty {
-                Section("최근 폴더") {
-                    ForEach(others, id: \.self) { folder in
-                        Button {
-                            store.openRecentFolder(folder)
-                        } label: {
-                            Text(folder.lastPathComponent)
-                            Text((folder.path as NSString).abbreviatingWithTildeInPath)
+    private func expansionBinding(for workspace: Workspace) -> Binding<Bool> {
+        Binding(
+            get: { !collapsedWorkspaces.contains(workspace.url) },
+            set: { expanded in
+                if expanded { collapsedWorkspaces.remove(workspace.url) }
+                else { collapsedWorkspaces.insert(workspace.url) }
+            }
+        )
+    }
+
+    /// 작업 공간 이름 줄. 누르면 접히고, + 로 그 안에 노트를 만든다.
+    private func workspaceHeader(_ workspace: Workspace) -> some View {
+        HStack(spacing: 4) {
+            Text(workspace.name)
+                .lineLimit(1)
+                .truncationMode(.middle)
+            Spacer(minLength: 4)
+            Button {
+                store.createNote(in: workspace.url)
+            } label: {
+                Image(systemName: "plus")
+            }
+            .buttonStyle(.borderless)
+            .help("\(workspace.name)에 새 노트")
+        }
+        .contextMenu {
+            Button("Finder에서 보기") { store.revealInFinder(workspace.url) }
+            Button("경로 복사") { copyPath(workspace.url) }
+            Divider()
+            Button("작업 공간 연결 해제") { store.disconnectWorkspace(workspace) }
+        }
+    }
+
+    private func noteRow(_ note: Note) -> some View {
+        Label {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(note.title)
+                    .lineLimit(1)
+                // 하위 폴더에 있는 노트는 어디 있는지 보여준다
+                if let subfolder = note.subfolder {
+                    Text(subfolder)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.head)
+                }
+            }
+        } icon: {
+            Image(systemName: "doc.text")
+        }
+        .tag(note.url)
+        .contextMenu {
+            Button("Finder에서 보기") { store.revealInFinder(note.url) }
+            Button("경로 복사") { copyPath(note.url) }
+        }
+    }
+
+    /// 검색창 아래에서 작업 공간을 더하거나 최근 폴더를 연결한다
+    private var workspaceBar: some View {
+        HStack(spacing: 6) {
+            Menu {
+                let connected = Set(store.workspaces.map(\.url))
+                let others = store.recentFolders.filter { !connected.contains($0) }
+                if !others.isEmpty {
+                    Section("최근 폴더") {
+                        ForEach(others, id: \.self) { folder in
+                            Button {
+                                store.addWorkspace(folder)
+                            } label: {
+                                Text(folder.lastPathComponent)
+                                Text((folder.path as NSString).abbreviatingWithTildeInPath)
+                            }
                         }
                     }
                 }
+                Button("폴더 고르기…") { store.connectWorkspace() }
+            } label: {
+                Label("작업 공간 추가", systemImage: "plus.rectangle.on.folder")
+                    .font(.caption)
             }
-            Button("다른 폴더 열기…") { store.chooseFolder() }
-            if store.folderURL != nil {
-                Button("Finder에서 보기") { store.revealFolderInFinder() }
-            }
-        } label: {
-            HStack(spacing: 5) {
-                Image(systemName: "folder")
-                    .foregroundStyle(Brand.accent)
-                Text(store.folderURL?.lastPathComponent ?? "노트 폴더 선택")
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                Spacer(minLength: 2)
-                Image(systemName: "chevron.up.chevron.down")
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+
+            Spacer(minLength: 0)
+
+            if store.workspaces.count > 1 {
+                Text("\(store.workspaces.count)개 연결됨")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
-            .contentShape(Rectangle())
         }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
         .background(.bar)
@@ -174,18 +229,21 @@ struct ContentView: View {
                     .lineLimit(3)
                     .truncationMode(.middle)
                     .frame(maxWidth: 420)
-                Text("폴더가 옮겨졌거나 지워졌습니다. 다시 선택해 주세요.")
+                Text("폴더가 옮겨졌거나 지워졌습니다. 다시 연결해 주세요.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
-                Button("노트 폴더 선택…") { store.chooseFolder() }
+                Button("작업 공간 연결…") { store.connectWorkspace() }
                     .padding(.top, 4)
             }
             .padding(40)
-        } else if store.folderURL == nil {
+        } else if store.workspaces.isEmpty {
             VStack(spacing: 12) {
-                Text("노트를 모아둘 폴더를 선택하세요")
+                Text("노트를 모아둘 폴더를 작업 공간으로 연결하세요")
                     .foregroundStyle(.secondary)
-                Button("노트 폴더 열기") { store.chooseFolder() }
+                Text("하위 폴더까지 함께 읽고, 여러 개를 연결할 수 있습니다")
+                    .font(.callout)
+                    .foregroundStyle(.tertiary)
+                Button("작업 공간 연결…") { store.connectWorkspace() }
             }
         } else if store.selectedNoteURL == nil {
             Text("노트를 선택하세요")
@@ -201,7 +259,7 @@ struct ContentView: View {
                         controller: preview,
                         markdown: store.currentText,
                         noteURL: store.selectedNoteURL,
-                        folderURL: store.folderURL
+                        rootURL: store.workspaceURL(for: store.selectedNoteURL)
                     )
                     .frame(minWidth: 300)
                 }

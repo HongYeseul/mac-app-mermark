@@ -37,7 +37,7 @@ check("지역 설정과 무관하게 같은 형식",
       NoteStore.captureName(for: timestamp))
 
 print("\n── B. 저장")
-UserDefaults.standard.set(folder.path, forKey: "notesFolderPath")
+UserDefaults.standard.set([folder.path], forKey: "workspacePaths")
 let store = NoteStore()
 pump(0.4)
 
@@ -69,9 +69,9 @@ check("빠른 메모는 현재 선택을 바꾸지 않음", store.selectedNoteUR
       "\(store.selectedNoteURL?.lastPathComponent ?? "nil")")
 
 // 노트 폴더가 없으면 저장하지 않는다
-UserDefaults.standard.removeObject(forKey: "notesFolderPath")
+UserDefaults.standard.removeObject(forKey: "workspacePaths")
 let emptyStore = NoteStore()
-check("노트 폴더가 없으면 저장하지 않음", emptyStore.quickCapture("내용", at: timestamp) == nil)
+check("작업 공간이 없으면 저장하지 않음", emptyStore.quickCapture("내용", at: timestamp) == nil)
 
 print("\n── C. 전역 단축키")
 var pressed = 0

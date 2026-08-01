@@ -96,12 +96,18 @@ final class EditorController: NSObject, ObservableObject, NSTextViewDelegate {
 
     // MARK: - 문법 강조
 
-    /// 타이핑 중 매 글자마다 문서 전체를 다시 칠하지 않도록 짧게 모은다
+    /// 타이핑 중 매 글자마다 문서 전체를 다시 칠하지 않도록 짧게 모은다.
+    ///
+    /// 한 번 칠하는 데 드는 시간은 문서 길이에 비례한다(측정: 20KB 26ms, 95KB 130ms).
+    /// 긴 문서에서는 간격을 넓혀 칠하는 작업이 연달아 쌓이지 않게 한다.
     private func scheduleHighlight() {
         highlightWorkItem?.cancel()
         let workItem = DispatchWorkItem { [weak self] in self?.highlightNow() }
         highlightWorkItem = workItem
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12, execute: workItem)
+
+        let length = (textView.string as NSString).length
+        let delay: TimeInterval = length > 40_000 ? 0.35 : 0.12
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
     }
 
     private func highlightNow() {

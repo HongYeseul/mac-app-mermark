@@ -20,6 +20,8 @@ final class NoteStore: ObservableObject {
     @Published private(set) var focusRequestID = 0
     @Published var searchQuery = ""
     @Published var selectedTag: String?
+    /// 저장된 노트 폴더를 쓸 수 없을 때. 화면에 사정을 알리고 다시 고르게 하려고 둔다.
+    @Published private(set) var unavailableFolderPath: String?
     /// 메뉴에서 PDF 내보내기를 고르면 프리뷰 쪽에서 처리하도록 ContentView가 연결한다
     var onExportPDF: (() -> Void)?
 
@@ -38,9 +40,13 @@ final class NoteStore: ObservableObject {
     private var tagCache: [URL: (modifiedAt: Date, tags: [String])] = [:]
 
     init() {
-        if let path = UserDefaults.standard.string(forKey: folderPathKey),
-           FileManager.default.fileExists(atPath: path) {
-            openFolder(URL(fileURLWithPath: path))
+        if let path = UserDefaults.standard.string(forKey: folderPathKey) {
+            if isUsableFolder(path) {
+                openFolder(URL(fileURLWithPath: path))
+            } else {
+                // 폴더가 옮겨지거나 지워진 경우. 빈 화면만 두면 무엇이 잘못됐는지 알 수 없다.
+                unavailableFolderPath = path
+            }
         }
 
         // 앱 비활성화/종료 시 대기 중인 자동 저장을 즉시 반영 (PLAN.md 4: 포커스 아웃 시 저장)
@@ -64,14 +70,22 @@ final class NoteStore: ObservableObject {
         panel.canChooseFiles = false
         panel.canCreateDirectories = true
         panel.prompt = "이 폴더 사용"
-        panel.message = "마크다운 노트 노트 폴더를 선택하세요"
+        panel.message = "노트를 모아둘 폴더를 선택하세요"
         guard panel.runModal() == .OK, let url = panel.url else { return }
         UserDefaults.standard.set(url.path, forKey: folderPathKey)
         selectedNoteURL = nil
+        unavailableFolderPath = nil
         openFolder(url)
     }
 
+    private func isUsableFolder(_ path: String) -> Bool {
+        var isDirectory: ObjCBool = false
+        return FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory)
+            && isDirectory.boolValue
+    }
+
     private func openFolder(_ url: URL) {
+        unavailableFolderPath = nil
         folderURL = url.standardizedFileURL
         reloadNotes()
         if selectedNoteURL == nil {
@@ -354,6 +368,24 @@ final class NoteStore: ObservableObject {
         eventStream = stream
     }
 
+    private func markFolderUnavailable() {
+        // 대기 중인 저장이 사라진 폴더에 파일을 되살리지 않도록 먼저 취소한다
+        saveWorkItem?.cancel()
+        saveWorkItem = nil
+
+        unavailableFolderPath = folderURL?.path
+        folderURL = nil
+        notes = []
+        selectedNoteURL = nil
+        currentText = ""
+        selectedTag = nil
+        contentCache = [:]
+        tagCache = [:]
+
+        // FSEvents 콜백 안에서 스트림을 정리하지 않도록 한 번 미룬다
+        DispatchQueue.main.async { [weak self] in self?.stopWatching() }
+    }
+
     private func stopWatching() {
         guard let eventStream else { return }
         FSEventStreamStop(eventStream)
@@ -364,6 +396,12 @@ final class NoteStore: ObservableObject {
 
     /// 우리 저장도 이벤트를 만들기 때문에, 디스크 내용이 실제로 다를 때만 반영해 되돌림 루프를 막는다.
     private func handleExternalChange() {
+        // 노트 폴더 자체가 없어졌으면 목록만 비우지 말고 사정을 알린다
+        if let folderURL, !isUsableFolder(folderURL.path) {
+            markFolderUnavailable()
+            return
+        }
+
         reloadNotes()
         guard let url = selectedNoteURL else { return }
 

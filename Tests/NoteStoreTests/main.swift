@@ -199,6 +199,52 @@ check("폴더가 있으면 새 노트가 만들어짐", readyStore.notes.count =
 check("만든 노트가 선택됨", readyStore.selectedNoteURL?.lastPathComponent.hasPrefix("새 노트") == true,
       "\(readyStore.selectedNoteURL?.lastPathComponent ?? "nil")")
 
+// MARK: - G. 노트 폴더를 쓸 수 없을 때 (이슈 #1)
+
+print("\n── G. 노트 폴더를 쓸 수 없을 때")
+let goneDir = URL(fileURLWithPath: NSTemporaryDirectory())
+    .appendingPathComponent("mermark-사라질폴더-\(ProcessInfo.processInfo.processIdentifier)")
+try! fm.createDirectory(at: goneDir, withIntermediateDirectories: true)
+try! "# 노트".write(to: goneDir.appendingPathComponent("노트.md"), atomically: true, encoding: .utf8)
+
+// 1) 시작할 때 저장된 경로가 없으면 사정을 알린다
+UserDefaults.standard.set(goneDir.path + "-없는경로", forKey: "notesFolderPath")
+let missingStore = NoteStore()
+pump(0.3)
+check("없는 경로면 폴더를 열지 않음", missingStore.folderURL == nil)
+check("없는 경로를 알려줌", missingStore.unavailableFolderPath == goneDir.path + "-없는경로",
+      missingStore.unavailableFolderPath ?? "nil")
+
+// 2) 폴더가 아니라 파일을 가리켜도 마찬가지
+let filePath = goneDir.appendingPathComponent("노트.md").path
+UserDefaults.standard.set(filePath, forKey: "notesFolderPath")
+let filePointingStore = NoteStore()
+pump(0.3)
+check("폴더가 아닌 경로도 걸러냄", filePointingStore.folderURL == nil
+      && filePointingStore.unavailableFolderPath == filePath,
+      filePointingStore.unavailableFolderPath ?? "nil")
+
+// 3) 정상 폴더면 안내를 띄우지 않는다
+UserDefaults.standard.set(goneDir.path, forKey: "notesFolderPath")
+let liveStore = NoteStore()
+pump(0.4)
+check("정상 폴더면 안내 없음", liveStore.folderURL != nil && liveStore.unavailableFolderPath == nil,
+      liveStore.unavailableFolderPath ?? "nil")
+check("노트도 정상적으로 읽힘", liveStore.notes.count == 1, "\(liveStore.notes.count)")
+
+// 4) 쓰던 중에 폴더가 사라지면 알아채고 정리한다
+liveStore.textChanged("# 노트\n저장 대기 중인 내용")
+try! fm.removeItem(at: goneDir)
+pump(2.0)
+check("사용 중 폴더가 사라지면 알아챔", liveStore.unavailableFolderPath == goneDir.path,
+      liveStore.unavailableFolderPath ?? "nil")
+check("목록과 선택을 비움",
+      liveStore.notes.isEmpty && liveStore.selectedNoteURL == nil && liveStore.folderURL == nil,
+      "노트 \(liveStore.notes.count)개")
+pump(1.0)
+check("대기 중이던 저장이 폴더를 되살리지 않음", !fm.fileExists(atPath: goneDir.path))
+
 print("\n" + (failures.isEmpty ? "ALL PASS (\(total) checks)" : "FAILURES(\(failures.count)/\(total)): \(failures.joined(separator: ", "))"))
 try? fm.removeItem(at: rootDir)
+try? fm.removeItem(at: goneDir)
 exit(failures.isEmpty ? 0 : 1)

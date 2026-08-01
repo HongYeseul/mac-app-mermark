@@ -123,9 +123,30 @@ struct ContentView: View {
 
     @ViewBuilder
     private var detail: some View {
-        if store.folderURL == nil {
+        if let missingPath = store.unavailableFolderPath {
+            VStack(spacing: 10) {
+                Image(systemName: "folder.badge.questionmark")
+                    .font(.system(size: 34))
+                    .foregroundStyle(.secondary)
+                Text("노트 폴더를 찾을 수 없습니다")
+                    .font(.headline)
+                Text(missingPath)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+                    .lineLimit(3)
+                    .truncationMode(.middle)
+                    .frame(maxWidth: 420)
+                Text("폴더가 옮겨졌거나 지워졌습니다. 다시 선택해 주세요.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                Button("노트 폴더 선택…") { store.chooseFolder() }
+                    .padding(.top, 4)
+            }
+            .padding(40)
+        } else if store.folderURL == nil {
             VStack(spacing: 12) {
-                Text("마크다운 노트 노트 폴더를 선택하세요")
+                Text("노트를 모아둘 폴더를 선택하세요")
                     .foregroundStyle(.secondary)
                 Button("노트 폴더 열기") { store.chooseFolder() }
             }

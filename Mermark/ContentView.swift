@@ -49,6 +49,12 @@ struct ContentView: View {
                     ForEach(store.filteredNotes) { note in
                         Label(note.title, systemImage: "doc.text")
                             .tag(note.url)
+                            .contextMenu {
+                                Button("Finder에서 보기") { store.revealInFinder(note.url) }
+                                Button("경로 복사") { copyPath(note.url) }
+                                Divider()
+                                Button("노트 폴더를 Finder에서 보기") { store.revealFolderInFinder() }
+                            }
                     }
                 }
             }
@@ -93,6 +99,8 @@ struct ContentView: View {
                 }
         }
         .navigationTitle(store.folderURL?.lastPathComponent ?? "Mermark")
+        // 작업 폴더를 바꿀 수 있으니 지금 어디를 쓰는지 항상 보이게 한다
+        .navigationSubtitle(store.folderDisplayPath ?? "")
         // 선택 강조·세그먼트 등 시스템 컨트롤까지 메인 색상을 따르게 한다
         .tint(Brand.accent)
         .inspector(isPresented: $showsOutline) {
@@ -107,6 +115,12 @@ struct ContentView: View {
             preview.applyBrandColors()
             themeRevision += 1        // 사이드바 색을 다시 그리게 한다
         }
+    }
+
+    private func copyPath(_ url: URL) {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(url.path, forType: .string)
     }
 
     /// 누르면 그 태그만 보고, 다시 누르면 전체로 돌아간다

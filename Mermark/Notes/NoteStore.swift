@@ -78,6 +78,22 @@ final class NoteStore: ObservableObject {
         openFolder(url)
     }
 
+    /// 창 부제로 보여줄 노트 폴더 경로. 홈 아래면 `~`로 줄인다.
+    var folderDisplayPath: String? {
+        guard let folderURL else { return nil }
+        return (folderURL.path as NSString).abbreviatingWithTildeInPath
+    }
+
+    func revealInFinder(_ url: URL) {
+        NSWorkspace.shared.activateFileViewerSelecting([url])
+    }
+
+    /// 노트 폴더 자체를 Finder에서 연다
+    func revealFolderInFinder() {
+        guard let folderURL else { return }
+        NSWorkspace.shared.activateFileViewerSelecting([folderURL])
+    }
+
     private func isUsableFolder(_ path: String) -> Bool {
         var isDirectory: ObjCBool = false
         return FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory)

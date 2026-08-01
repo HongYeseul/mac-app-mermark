@@ -19,6 +19,9 @@ struct MermarkApp: App {
                     .keyboardShortcut("n", modifiers: .command)
                 Button("노트 폴더 열기…") { store.chooseFolder() }
                     .keyboardShortcut("o", modifiers: .command)
+                Button("노트 폴더를 Finder에서 보기") { store.revealFolderInFinder() }
+                    .keyboardShortcut("r", modifiers: [.command, .shift])
+                    .disabled(store.folderURL == nil)
             }
             CommandGroup(after: .saveItem) {
                 Button("모든 다이어그램 내보내기…") { exportAllDiagrams() }

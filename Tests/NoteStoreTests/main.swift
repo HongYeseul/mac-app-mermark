@@ -244,7 +244,39 @@ check("목록과 선택을 비움",
 pump(1.0)
 check("대기 중이던 저장이 폴더를 되살리지 않음", !fm.fileExists(atPath: goneDir.path))
 
+// MARK: - H. 작업 폴더 위치 보여주기
+
+print("\n── H. 작업 폴더 위치")
+UserDefaults.standard.set(rootDir.path, forKey: "notesFolderPath")
+let pathStore = NoteStore()
+pump(0.3)
+check("폴더 경로를 알려줌", pathStore.folderDisplayPath != nil)
+check("경로가 실제 폴더를 가리킴",
+      pathStore.folderDisplayPath?.hasSuffix(rootDir.lastPathComponent) == true,
+      pathStore.folderDisplayPath ?? "nil")
+
+// 홈 아래 경로는 ~ 로 줄여 창 부제가 길어지지 않게 한다
+let home = FileManager.default.homeDirectoryForCurrentUser
+let underHome = home.appendingPathComponent("mermark-경로표시-\(ProcessInfo.processInfo.processIdentifier)")
+try! fm.createDirectory(at: underHome, withIntermediateDirectories: true)
+defer { try? fm.removeItem(at: underHome) }
+UserDefaults.standard.set(underHome.path, forKey: "notesFolderPath")
+let homeStore = NoteStore()
+pump(0.3)
+check("홈 아래 경로는 ~ 로 줄임", homeStore.folderDisplayPath?.hasPrefix("~/") == true,
+      homeStore.folderDisplayPath ?? "nil")
+check("줄인 경로에도 폴더 이름이 남음",
+      homeStore.folderDisplayPath?.contains("mermark-경로표시") == true,
+      homeStore.folderDisplayPath ?? "nil")
+
+UserDefaults.standard.removeObject(forKey: "notesFolderPath")
+let noFolderStore = NoteStore()
+pump(0.2)
+check("폴더가 없으면 경로도 없음", noFolderStore.folderDisplayPath == nil,
+      noFolderStore.folderDisplayPath ?? "nil")
+
 print("\n" + (failures.isEmpty ? "ALL PASS (\(total) checks)" : "FAILURES(\(failures.count)/\(total)): \(failures.joined(separator: ", "))"))
 try? fm.removeItem(at: rootDir)
 try? fm.removeItem(at: goneDir)
+try? fm.removeItem(at: underHome)
 exit(failures.isEmpty ? 0 : 1)

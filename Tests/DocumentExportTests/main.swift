@@ -38,6 +38,26 @@ func finish() {
     exit(failures.isEmpty ? 0 : 1)
 }
 
+print("── 0. 쪽 나누는 지점 (이슈 #2)")
+check("빈 문서는 한 쪽",
+      PDFExporter.pageBreaks(blockTops: [], totalHeight: 0, pageHeight: 700).count == 2,
+      "\(PDFExporter.pageBreaks(blockTops: [], totalHeight: 0, pageHeight: 700))")
+check("한 쪽에 들어가면 나누지 않음",
+      PDFExporter.pageBreaks(blockTops: [0, 100, 300], totalHeight: 400, pageHeight: 700) == [0, 400],
+      "\(PDFExporter.pageBreaks(blockTops: [0, 100, 300], totalHeight: 400, pageHeight: 700))")
+check("블록 경계에서 끊는다",
+      PDFExporter.pageBreaks(blockTops: [0, 300, 650, 900], totalHeight: 1200, pageHeight: 700)
+        == [0, 650, 1200],
+      "\(PDFExporter.pageBreaks(blockTops: [0, 300, 650, 900], totalHeight: 1200, pageHeight: 700))")
+check("한 쪽을 넘는 블록은 어쩔 수 없이 자름",
+      PDFExporter.pageBreaks(blockTops: [0], totalHeight: 1600, pageHeight: 700) == [0, 700, 1400, 1600],
+      "\(PDFExporter.pageBreaks(blockTops: [0], totalHeight: 1600, pageHeight: 700))")
+let manyBreaks = PDFExporter.pageBreaks(blockTops: (0..<40).map { Double($0) * 120 },
+                                        totalHeight: 4800, pageHeight: 700)
+check("나눈 지점은 오름차순", zip(manyBreaks, manyBreaks.dropFirst()).allSatisfy { $0 < $1 },
+      "\(manyBreaks)")
+check("마지막은 문서 끝", manyBreaks.last == 4800, "\(manyBreaks.last ?? -1)")
+
 let markdown = """
 ---
 title: 분기 보고서
@@ -56,6 +76,9 @@ tags:
 내용이 이어집니다.
 
 수식도 포함: $E = mc^2$
+
+\(  (1...40).map { "## 섹션 \($0)\n\n" + String(repeating: "본문 내용입니다. ", count: 10) }
+        .joined(separator: "\n\n") )
 """
 
 nav.onReady = {
@@ -97,8 +120,11 @@ nav.onReady = {
                 check("목록 값은 한 줄로 합침", values.last == "정산, 검토", "\(values)")
 
                 check("수평선으로 잘못 해석되지 않음", (r["hrCount"] as? Int) == 0, "\(r["hrCount"] ?? "nil")")
+                let h2Texts = r["h2Texts"] as? [String] ?? []
                 check("setext 제목으로 잘못 해석되지 않음",
-                      (r["h2Texts"] as? [String]) == ["두 번째 섹션"], "\(r["h2Texts"] ?? "nil")")
+                      h2Texts.first == "두 번째 섹션"
+                      && !h2Texts.contains { $0.contains("title") || $0.contains("author") },
+                      "\(h2Texts.prefix(3))")
 
                 // 프론트매터가 줄 번호를 밀어내면 스크롤 동기화가 어긋난다
                 check("프론트매터 앵커는 0번 줄", (r["boxLine"] as? String) == "0", "\(r["boxLine"] ?? "nil")")
@@ -121,15 +147,22 @@ nav.onReady = {
                         return
                     }
                     check("유효한 PDF", true)
-                    check("쪽이 하나 이상", pdf.pageCount >= 1, "\(pdf.pageCount)")
+                    check("긴 문서는 여러 쪽으로 나뉨", pdf.pageCount > 1, "\(pdf.pageCount)쪽")
 
                     let text = pdf.string ?? ""
                     check("본문 제목 포함", text.contains("분기 보고서"), "앞부분: \(text.prefix(80))")
                     check("두 번째 섹션도 포함", text.contains("두 번째 섹션"), "앞부분: \(text.prefix(80))")
                     check("프론트매터 값도 포함", text.contains("홍예슬"), "앞부분: \(text.prefix(80))")
-                    check("문서 길이만큼 페이지가 길어짐",
-                          (pdf.page(at: 0)?.bounds(for: .mediaBox).height ?? 0) > 200,
-                          "\(pdf.page(at: 0)?.bounds(for: .mediaBox).height ?? -1)")
+                    check("마지막 섹션까지 빠짐없이 들어감", text.contains("섹션 40"),
+                          "끝부분: \(text.suffix(80))")
+
+                    // 쪽 크기가 제각각이면 인쇄·공유할 때 어색하다
+                    let sizes = Set((0..<pdf.pageCount).compactMap { index -> String? in
+                        guard let bounds = pdf.page(at: index)?.bounds(for: .mediaBox) else { return nil }
+                        return "\(Int(bounds.width))x\(Int(bounds.height))"
+                    })
+                    check("모든 쪽이 같은 크기", sizes.count == 1, "\(sizes)")
+                    check("A4 크기(595x842)", sizes.first == "595x842", "\(sizes)")
                     let size = (try? fm.attributesOfItem(atPath: outputURL.path)[.size] as? Int) ?? 0
                     check("빈 파일이 아님", size > 2000, "\(size) bytes")
 

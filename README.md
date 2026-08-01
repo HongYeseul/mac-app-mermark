@@ -1,5 +1,7 @@
 # Mermark
 
+<img src="docs/app-icon.png" width="96" align="right" alt="Mermark 앱 아이콘">
+
 Mermaid 다이어그램을 **바로 이미지로 뽑아 쓰는** macOS 마크다운 뷰어/에디터.
 
 프리뷰의 Mermaid 블록에 마우스를 올리면 `PNG 복사 · PNG 저장 · SVG 저장` 버튼이 뜹니다.
@@ -129,7 +131,8 @@ Mermaid가 자바스크립트 라이브러리라 프리뷰는 웹뷰가 자연�
 에디터의 최상단 보이는 줄과 프리뷰 앵커를 비례 보간해 맞춥니다. 비율이 아니라 줄 기준이라
 Mermaid 블록처럼 "원본 6줄 = 화면 300px"인 구간에서도 어긋나지 않습니다.
 
-자세한 설계와 로드맵은 [docs/PLAN.md](docs/PLAN.md)에 있습니다.
+자세한 설계와 로드맵은 [docs/PLAN.md](docs/PLAN.md), 색과 아이콘은
+[docs/DESIGN.md](docs/DESIGN.md)에 있습니다.
 
 ## 검증
 
@@ -215,21 +218,16 @@ Xcode의 synchronized folder는 리소스를 번들 `Resources` 루트에 **평�
 그래서 KaTeX 폰트도 하위 폴더 없이 두고, 스크립트가 CSS의 `url(fonts/...)`에서 `fonts/`를
 지웁니다. 번들하지 않는 woff·ttf 대체 경로도 함께 제거합니다.
 
-## 색상
+## 색상과 아이콘
+
+![Mermark 색상 팔레트](docs/palette.png)
 
 메인 색상은 민트입니다. 한 가지 값을 그대로 쓰지 않고 단계를 나눠 씁니다 —
 파스텔 톤은 로고처럼 넓은 면적에서는 좋지만, 흰 배경 위 글자로 쓰면 대비가 모자랍니다.
 
-| 용도 | 라이트 | 다크 |
-|---|---|---|
-| 로고·큰 면적 | `#45C7B6` | `#45C7B6` |
-| 글자·아이콘 (태그, 선택 강조) | `#17786B` | `#7EDCCC` |
-| 태그 배경 | `#45C7B6` 16% | `#7EDCCC` 22% |
-| 코드 | `#6B7A8F` | `#9BB0C7` |
-
-정의는 [Mermark/Brand.swift](Mermark/Brand.swift)에 있고, 프리뷰
-[preview.html](Mermark/Resources/preview.html)의 CSS도 같은 값을 씁니다.
-코드는 메인 색과 같은 청록 계열이면 헷갈리므로 차분한 슬레이트로 따로 뒀습니다.
+고른 이유, 다른 색을 그대로 둔 이유, 아이콘을 다시 만드는 방법은
+[docs/DESIGN.md](docs/DESIGN.md)에 정리했습니다. 색 정의는
+[Mermark/Brand.swift](Mermark/Brand.swift)에 모여 있습니다.
 
 ## 백로그
 

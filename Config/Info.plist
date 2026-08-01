@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  나머지 키는 GENERATE_INFOPLIST_FILE이 만들어 병합한다.
+  CFBundleIconFile은 INFOPLIST_KEY_* 자동 생성이 지원하지 않아 여기에 직접 적는다.
+-->
+<plist version="1.0">
+<dict>
+	<key>CFBundleIconFile</key>
+	<string>Mermark</string>
+</dict>
+</plist>

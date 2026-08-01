@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>Mermark 색상 팔레트</title>
+<style>
+  body {
+    font: 14px/1.5 -apple-system, "Apple SD Gothic Neo", sans-serif;
+    margin: 0; padding: 26px 30px;
+    background: #ffffff; color: #1c1c1e;
+  }
+  h1 { font-size: 18px; margin: 0 0 3px; letter-spacing: -0.2px; }
+  .sub { color: #7a7a80; margin: 0 0 22px; font-size: 12.5px; }
+
+  .band { display: flex; border-radius: 10px; overflow: hidden; margin-bottom: 26px; }
+  .band div { flex: 1; height: 74px; display: flex; align-items: flex-end; padding: 8px 10px; box-sizing: border-box; }
+  .band span { font: 11px ui-monospace, Menlo, monospace; }
+
+  table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+  th { text-align: left; font-weight: 600; color: #7a7a80; font-size: 11.5px;
+       padding: 0 10px 7px 0; border-bottom: 1px solid #e6e6ea; }
+  td { padding: 9px 10px 9px 0; border-bottom: 1px solid #f0f0f3; vertical-align: middle; }
+  .chip { width: 15px; height: 15px; border-radius: 4px; display: inline-block;
+          vertical-align: -3px; margin-right: 7px; border: 1px solid rgba(0,0,0,0.08); }
+  code { font: 11.5px ui-monospace, Menlo, monospace; color: #47474d; }
+  .use { color: #7a7a80; }
+
+  .samples { display: flex; gap: 26px; align-items: center; margin-top: 24px;
+             padding-top: 20px; border-top: 1px solid #e6e6ea; }
+  .panel { display: flex; gap: 12px; align-items: center; padding: 12px 14px; border-radius: 10px; }
+  .light { background: #ffffff; border: 1px solid #e6e6ea; }
+  .dark { background: #1c1c1e; border: 1px solid #2e2e32; }
+  .pill { display: inline-block; padding: 1px 9px; border-radius: 10px; font-size: 12px; }
+  .label { font-size: 11px; color: #9a9aa0; }
+</style>
+</head>
+<body>
+<h1>Mermark 색상 팔레트</h1>
+<p class="sub">메인 색상은 민트. 한 값을 그대로 쓰지 않고 단계를 나눠, 넓은 면적은 옅게 글자는 진하게 씁니다.</p>
+
+<div class="band">
+  <div style="background:#E4F6F2"><span style="color:#17786B">#E4F6F2</span></div>
+  <div style="background:#7EDCCC"><span style="color:#0f5a50">#7EDCCC</span></div>
+  <div style="background:#45C7B6"><span style="color:#0d4f46">#45C7B6</span></div>
+  <div style="background:#2FA593"><span style="color:#ffffff">#2FA593</span></div>
+  <div style="background:#17786B"><span style="color:#ffffff">#17786B</span></div>
+</div>
+
+<table>
+  <tr><th style="width:230px">용도</th><th style="width:150px">라이트</th><th style="width:150px">다크</th><th>비고</th></tr>
+  <tr>
+    <td>로고 · 큰 면적</td>
+    <td><span class="chip" style="background:#45C7B6"></span><code>#45C7B6</code></td>
+    <td><span class="chip" style="background:#45C7B6"></span><code>#45C7B6</code></td>
+    <td class="use">앱 아이콘은 #5AD5C2 → #2FA593 그러데이션</td>
+  </tr>
+  <tr>
+    <td>글자 · 아이콘 (태그, 선택 강조)</td>
+    <td><span class="chip" style="background:#17786B"></span><code>#17786B</code></td>
+    <td><span class="chip" style="background:#7EDCCC"></span><code>#7EDCCC</code></td>
+    <td class="use">흰 배경 대비 5.3 : 1 (WCAG AA)</td>
+  </tr>
+  <tr>
+    <td>태그 배경</td>
+    <td><span class="chip" style="background:#E4F6F2"></span><code>#45C7B6</code> 16%</td>
+    <td><span class="chip" style="background:#2b514c"></span><code>#7EDCCC</code> 22%</td>
+    <td class="use">투명도로 얹어 배경색과 섞이게</td>
+  </tr>
+  <tr>
+    <td>코드</td>
+    <td><span class="chip" style="background:#6B7A8F"></span><code>#6B7A8F</code></td>
+    <td><span class="chip" style="background:#9BB0C7"></span><code>#9BB0C7</code></td>
+    <td class="use">청록이면 메인 색과 헷갈려 슬레이트로 분리</td>
+  </tr>
+  <tr>
+    <td>목록 표시</td>
+    <td colspan="2"><code>systemOrange</code></td>
+    <td class="use">민트의 보색 쪽이라 구분이 쉬움</td>
+  </tr>
+  <tr>
+    <td>링크</td>
+    <td colspan="2"><code>linkColor</code></td>
+    <td class="use">파랑은 링크의 관습이라 그대로 둠</td>
+  </tr>
+</table>
+
+<div class="samples">
+  <div class="panel light">
+    <span class="label">라이트</span>
+    <span class="pill" style="background:rgba(69,199,182,0.16); color:#17786B">#정산</span>
+    <span style="color:#17786B; font-weight:600; font-size:12.5px">선택된 항목</span>
+    <code style="color:#6B7A8F">inline code</code>
+  </div>
+  <div class="panel dark">
+    <span class="label">다크</span>
+    <span class="pill" style="background:rgba(126,220,204,0.22); color:#7EDCCC">#정산</span>
+    <span style="color:#7EDCCC; font-weight:600; font-size:12.5px">선택된 항목</span>
+    <code style="color:#9BB0C7">inline code</code>
+  </div>
+</div>
+</body>
+</html>

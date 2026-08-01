@@ -264,6 +264,7 @@ struct ContentView: View {
                     .frame(minWidth: 300)
                 }
             }
+            .safeAreaInset(edge: .top, spacing: 0) { NoteTabBar(store: store) }
         }
     }
 

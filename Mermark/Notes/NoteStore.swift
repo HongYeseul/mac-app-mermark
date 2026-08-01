@@ -34,6 +34,8 @@ final class NoteStore: ObservableObject {
     /// 연결해 둔 작업 공간들. 여러 개를 동시에 열어 둘 수 있다.
     @Published private(set) var workspaces: [Workspace] = []
     @Published var notes: [Note] = []
+    /// 상단에 열려 있는 탭들. 연 순서를 그대로 유지한다.
+    @Published private(set) var openTabs: [URL] = []
     @Published var selectedNoteURL: URL?
     @Published var currentText: String = ""
     /// Cmd+N 직후 에디터로 포커스를 넘기기 위한 신호 (값이 바뀌면 에디터가 first responder가 됨)
@@ -120,6 +122,7 @@ final class NoteStore: ObservableObject {
     func disconnectWorkspace(_ workspace: Workspace) {
         workspaces.removeAll { $0.url == workspace.url }
         persistWorkspaces()
+        openTabs.removeAll { isInside($0, workspace.url) }
 
         // 지금 보던 노트가 끊긴 작업 공간 것이면 선택을 비운다
         if let selected = selectedNoteURL, isInside(selected, workspace.url) {
@@ -211,6 +214,7 @@ final class NoteStore: ObservableObject {
         let alive = Set(notes.map(\.url))
         contentCache = contentCache.filter { alive.contains($0.key) }
         tagCache = tagCache.filter { alive.contains($0.key) }
+        pruneTabs()
     }
 
     private func scanNotes(in workspace: Workspace) -> [Note] {
@@ -305,8 +309,48 @@ final class NoteStore: ObservableObject {
             tracksFilename = false
             return
         }
+        // 이미 열려 있으면 그 탭으로 가고, 아니면 끝에 새 탭을 연다
+        if !openTabs.contains(url) { openTabs.append(url) }
         currentText = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
         updateFilenameTracking(for: url)
+    }
+
+    // MARK: - 탭
+
+    func closeTab(_ url: URL) {
+        guard openTabs.contains(url) else { return }
+        let next = Self.tabAfterClosing(url, in: openTabs)
+        openTabs.removeAll { $0 == url }
+        guard selectedNoteURL == url else { return }
+        select(next)
+    }
+
+    func closeOtherTabs(_ kept: URL) {
+        guard openTabs.contains(kept) else { return }
+        openTabs = [kept]
+        if selectedNoteURL != kept { select(kept) }
+    }
+
+    /// 닫은 자리의 오른쪽 탭으로, 없으면 왼쪽으로 간다. 마지막 하나였으면 빈 화면.
+    static func tabAfterClosing(_ closed: URL, in tabs: [URL]) -> URL? {
+        guard let index = tabs.firstIndex(of: closed) else { return nil }
+        if index + 1 < tabs.count { return tabs[index + 1] }
+        return index > 0 ? tabs[index - 1] : nil
+    }
+
+    /// 없어진 노트의 탭을 닫는다. 보고 있던 노트가 없어졌으면 옆 탭으로 옮겨 간다.
+    private func pruneTabs() {
+        let alive = Set(notes.map(\.url))
+        let before = openTabs
+        let surviving = before.filter { alive.contains($0) }
+        guard surviving.count != before.count else { return }
+        openTabs = surviving
+
+        guard let selected = selectedNoteURL, !alive.contains(selected),
+              let position = before.firstIndex(of: selected) else { return }
+        let next = before[(position + 1)...].first { alive.contains($0) }
+            ?? before[..<position].last { alive.contains($0) }
+        select(next)
     }
 
     /// `mermark://open?path=...` 처리. 이 주소는 아무나 던질 수 있으므로
@@ -347,6 +391,8 @@ final class NoteStore: ObservableObject {
             return
         }
         reloadNotes()
+        // select()를 거치지 않으므로(방금 만든 빈 파일을 다시 읽을 필요가 없다) 탭은 여기서 연다
+        if !openTabs.contains(url) { openTabs.append(url) }
         selectedNoteURL = url
         currentText = ""
         tracksFilename = true
@@ -419,6 +465,8 @@ final class NoteStore: ObservableObject {
         guard target != url else { return }
         do {
             try FileManager.default.moveItem(at: url, to: target)
+            // 지웠다 새로 넣으면 탭 순서가 튄다. 자리는 그대로 두고 주소만 바꾼다.
+            if let index = openTabs.firstIndex(of: url) { openTabs[index] = target }
             selectedNoteURL = target
             reloadNotes()
         } catch {

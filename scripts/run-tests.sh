@@ -64,6 +64,7 @@ run_suite math             "$ROOT/Tests/MathTests/main.swift"
 run_suite theme            "$ROOT/Tests/ThemeTests/main.swift"
 run_suite view-mode        "$ROOT/Tests/ViewModeTests/main.swift"
 run_suite cli              "$ROOT/Tests/CLITests/main.swift"
+run_suite tabs             "$ROOT/Tests/TabTests/main.swift"
 
 if [ "$failed" -eq 0 ]; then
     echo "모든 검증 통과"

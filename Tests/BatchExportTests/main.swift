@@ -67,8 +67,30 @@ func finish() {
 }
 
 print("── 일괄 내보내기 실행")
-MermaidExporter.shared.exportAll(codes: codes, baseName: "설계 문서", to: outputDir) { written, failureCount in
+print("── 배율 자동 하향 계산 (이슈 #6)")
+let cap = MermaidExporter.maxPixelDimension
+check("작은 그림은 요청 배율 그대로",
+      MermaidExporter.effectiveScale(requested: 3, width: 400, height: 300) == 3,
+      "\(MermaidExporter.effectiveScale(requested: 3, width: 400, height: 300))")
+check("상한에 딱 맞으면 그대로",
+      MermaidExporter.effectiveScale(requested: 2, width: cap / 2, height: 100) == 2,
+      "\(MermaidExporter.effectiveScale(requested: 2, width: cap / 2, height: 100))")
+check("상한을 넘으면 낮춘다",
+      MermaidExporter.effectiveScale(requested: 3, width: cap / 2, height: 100) == 2,
+      "\(MermaidExporter.effectiveScale(requested: 3, width: cap / 2, height: 100))")
+check("세로로 긴 그림도 긴 변 기준",
+      MermaidExporter.effectiveScale(requested: 3, width: 100, height: cap / 2) == 2,
+      "\(MermaidExporter.effectiveScale(requested: 3, width: 100, height: cap / 2))")
+check("1x 아래로는 내리지 않음",
+      MermaidExporter.effectiveScale(requested: 2, width: cap * 3, height: 100) == 1,
+      "\(MermaidExporter.effectiveScale(requested: 2, width: cap * 3, height: 100))")
+check("크기가 0이면 요청 배율 유지",
+      MermaidExporter.effectiveScale(requested: 2, width: 0, height: 0) == 2)
+
+print("\n── 일괄 내보내기 실행")
+MermaidExporter.shared.exportAll(codes: codes, baseName: "설계 문서", to: outputDir) { written, failureCount, reducedCount in
     check("실패 없이 완료", failureCount == 0, "\(failureCount)")
+    check("작은 다이어그램은 배율을 낮추지 않음", reducedCount == 0, "\(reducedCount)개")
     check("파일 3개 생성", written.count == 3, "\(written.count)")
 
     let names = written.map(\.lastPathComponent)
@@ -89,8 +111,9 @@ MermaidExporter.shared.exportAll(codes: codes, baseName: "설계 문서", to: ou
     check("빈 파일 없음", byteCounts.allSatisfy { $0 > 1000 }, "\(byteCounts)")
 
     // 빈 목록은 아무 일도 하지 않아야 한다
-    MermaidExporter.shared.exportAll(codes: [], baseName: "빈 문서", to: outputDir) { written, failures in
-        check("빈 목록이면 파일 없이 즉시 완료", written.isEmpty && failures == 0, "\(written.count)/\(failures)")
+    MermaidExporter.shared.exportAll(codes: [], baseName: "빈 문서", to: outputDir) { written, failures, reduced in
+        check("빈 목록이면 파일 없이 즉시 완료",
+              written.isEmpty && failures == 0 && reduced == 0, "\(written.count)/\(failures)")
         finish()
     }
 }

@@ -27,7 +27,9 @@ final class MermaidExporter: NSObject, WKNavigationDelegate {
     private struct Batch {
         var written: [URL] = []
         var failures = 0
-        let completion: (_ written: [URL], _ failures: Int) -> Void
+        /// 크기 때문에 배율이 낮아진 다이어그램 수
+        var reducedCount = 0
+        let completion: (_ written: [URL], _ failures: Int, _ reduced: Int) -> Void
     }
 
     private let webView: WKWebView
@@ -36,11 +38,26 @@ final class MermaidExporter: NSObject, WKNavigationDelegate {
     private var isExporting = false
     private var pendingJobs: [Job] = []
     private var batch: Batch?
+    /// 단건 내보내기에서 배율이 낮아졌을 때 마칠 무렵 알릴 문구
+    private var pendingScaleNotice: String?
 
     // 렌더 측정 전에는 충분히 큰 프레임이어야 SVG가 자연 크기로 배치된다
     private static let stagingSize = NSSize(width: 2000, height: 2000)
     /// 아주 긴 다이어그램에서 스냅샷이 과도하게 커지는 것을 막는다
-    private static let maxPixelDimension: Double = 8192
+    static let maxPixelDimension: Double = 8192
+
+    /// 픽셀 상한을 넘지 않도록 낮춘 실제 배율.
+    /// 1x로도 상한을 넘는 다이어그램은 더 낮추지 않고 1x로 둔다(글자가 뭉개지므로).
+    static func effectiveScale(
+        requested: Int,
+        width: Double,
+        height: Double,
+        maxDimension: Double = maxPixelDimension
+    ) -> Double {
+        let longestSide = max(width, height)
+        guard longestSide > 0 else { return Double(requested) }
+        return max(1, min(Double(requested), maxDimension / longestSide))
+    }
 
     private override init() {
         let initialFrame = NSRect(origin: .zero, size: Self.stagingSize)
@@ -87,15 +104,18 @@ final class MermaidExporter: NSObject, WKNavigationDelegate {
         panel.message = "다이어그램 \(codes.count)개를 저장할 폴더를 선택하세요"
         guard panel.runModal() == .OK, let directory = panel.url else { return }
 
-        exportAll(codes: codes, baseName: baseName, to: directory) { [weak self] written, failures in
+        exportAll(codes: codes, baseName: baseName, to: directory) { [weak self] written, failures, reduced in
             guard let self else { return }
             guard !written.isEmpty else {
                 self.showAlert(title: "내보내기 실패", message: "다이어그램을 저장하지 못했습니다.")
                 return
             }
-            let message = failures == 0
+            var message = failures == 0
                 ? "다이어그램 \(written.count)개를 저장했습니다."
                 : "다이어그램 \(written.count)개를 저장했고 \(failures)개는 실패했습니다."
+            if reduced > 0 {
+                message += "\n\(reduced)개는 크기가 커서 배율을 낮춰 저장했습니다."
+            }
             self.showAlert(title: "일괄 내보내기 완료", message: message)
             NSWorkspace.shared.activateFileViewerSelecting(written)
         }
@@ -103,9 +123,9 @@ final class MermaidExporter: NSObject, WKNavigationDelegate {
 
     /// 폴더 선택 없이 바로 저장한다. 파일명은 `문서명-1.png`, `문서명-2.png` 순.
     func exportAll(codes: [String], baseName: String, to directory: URL,
-                   completion: @escaping (_ written: [URL], _ failures: Int) -> Void) {
+                   completion: @escaping (_ written: [URL], _ failures: Int, _ reduced: Int) -> Void) {
         guard !codes.isEmpty else {
-            completion([], 0)
+            completion([], 0, 0)
             return
         }
         batch = Batch(completion: completion)
@@ -187,10 +207,19 @@ final class MermaidExporter: NSObject, WKNavigationDelegate {
         }
         hostWindow.setContentSize(NSSize(width: width, height: height))
 
-        // 요청 배율이 픽셀 상한을 넘으면 상한에 맞춰 자동으로 낮춘다
-        let requested = Double(job.options.scale)
-        let limit = Self.maxPixelDimension / max(width, height)
-        let scale = max(1, min(requested, limit))
+        // 요청 배율이 픽셀 상한을 넘으면 상한에 맞춰 자동으로 낮춘다.
+        // 조용히 낮추면 3x를 골랐는데 왜 작게 나오는지 알 수 없으므로 알려준다.
+        let scale = Self.effectiveScale(requested: job.options.scale, width: width, height: height)
+        if scale < Double(job.options.scale) {
+            if batch != nil {
+                batch?.reducedCount += 1
+            } else {
+                pendingScaleNotice = String(
+                    format: "다이어그램이 커서 %dx 대신 %.1fx로 내보냈습니다. (한 변 최대 %d픽셀)",
+                    job.options.scale, scale, Int(Self.maxPixelDimension)
+                )
+            }
+        }
 
         // 리사이즈가 웹 프로세스 레이아웃에 반영될 시간을 준 뒤 스냅샷
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
@@ -300,6 +329,10 @@ final class MermaidExporter: NSObject, WKNavigationDelegate {
 
     private func finishJob(error: String?) {
         if let error { showAlert(title: "Mermaid 내보내기 오류", message: error) }
+        if let notice = pendingScaleNotice {
+            pendingScaleNotice = nil
+            showAlert(title: "해상도를 낮춰 내보냈습니다", message: notice)
+        }
         isExporting = false
         processNextJobIfPossible()
     }
@@ -307,7 +340,7 @@ final class MermaidExporter: NSObject, WKNavigationDelegate {
     private func finalizeBatchIfNeeded() {
         guard let batch else { return }
         self.batch = nil
-        batch.completion(batch.written, batch.failures)
+        batch.completion(batch.written, batch.failures, batch.reducedCount)
     }
 
     private func showAlert(title: String, message: String) {

@@ -9,6 +9,8 @@ final class PreviewController: NSObject, ObservableObject, WKNavigationDelegate,
     var onScrollToLine: ((Int) -> Void)?
     /// 프리뷰에서 다른 노트 링크를 눌렀을 때 (파일 URL, 앵커)
     var onOpenNote: ((URL, String?) -> Void)?
+    /// 할 일 체크박스를 눌렀을 때 (원본 줄 번호)
+    var onToggleTask: ((Int) -> Void)?
 
     private var isPageReady = false
     private var latestMarkdown: String?
@@ -30,6 +32,7 @@ final class PreviewController: NSObject, ObservableObject, WKNavigationDelegate,
 
         configuration.userContentController.add(self, name: "mermaidExport")
         configuration.userContentController.add(self, name: "previewScroll")
+        configuration.userContentController.add(self, name: "toggleTask")
         webView.navigationDelegate = self
 
         if let url = Bundle.main.url(forResource: "preview", withExtension: "html") {
@@ -147,6 +150,9 @@ final class PreviewController: NSObject, ObservableObject, WKNavigationDelegate,
         case "previewScroll":
             guard let line = (message.body as? NSNumber)?.intValue else { return }
             onScrollToLine?(line)
+        case "toggleTask":
+            guard let line = (message.body as? NSNumber)?.intValue else { return }
+            onToggleTask?(line)
         case "mermaidExport":
             guard let body = message.body as? [String: String],
                   let code = body["code"], let action = body["action"] else { return }

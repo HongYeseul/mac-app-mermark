@@ -120,6 +120,12 @@ final class NoteStore: ObservableObject {
         }
     }
 
+    /// 프리뷰의 체크박스를 눌렀을 때 원본을 고친다
+    func toggleTask(atLine line: Int) {
+        guard let updated = MarkdownTaskList.toggle(in: currentText, line: line) else { return }
+        textChanged(updated)
+    }
+
     func toggleTag(_ tag: String) {
         selectedTag = (selectedTag?.caseInsensitiveCompare(tag) == .orderedSame) ? nil : tag
     }

@@ -54,40 +54,43 @@ struct ContentView: View {
             .navigationSplitViewColumnWidth(min: 180, ideal: 220)
         } detail: {
             detail
-        }
-        .navigationTitle(store.folderURL?.lastPathComponent ?? "Mermark")
-        .toolbar {
-            ToolbarItemGroup {
-                Button {
-                    store.createNoteChoosingFolderIfNeeded()
-                } label: {
-                    Image(systemName: "square.and.pencil")
-                }
-                .help("새 노트 (⌘N)")
+                // 툴바를 detail에 붙여야 항목이 사이드바 쪽으로 몰려 잘리지 않는다
+                .toolbar {
+                    ToolbarItemGroup(placement: .navigation) {
+                        Button {
+                            store.createNoteChoosingFolderIfNeeded()
+                        } label: {
+                            Image(systemName: "square.and.pencil")
+                        }
+                        .help("새 노트 (⌘N)")
 
-                Button {
-                    store.chooseFolder()
-                } label: {
-                    Image(systemName: "folder")
-                }
-                .help("노트 폴더 선택 (⌘O)")
+                        Button {
+                            store.chooseFolder()
+                        } label: {
+                            Image(systemName: "folder")
+                        }
+                        .help("노트 폴더 선택 (⌘O)")
+                    }
 
-                Picker("보기 모드", selection: $mode) {
-                    ForEach(ViewMode.allCases) { mode in
-                        Image(systemName: mode.symbol).tag(mode)
+                    ToolbarItemGroup(placement: .primaryAction) {
+                        Picker("보기 모드", selection: $mode) {
+                            ForEach(ViewMode.allCases) { mode in
+                                Image(systemName: mode.symbol).tag(mode)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        .help("뷰어 / 에디터 / 분할")
+
+                        Button {
+                            showsOutline.toggle()
+                        } label: {
+                            Image(systemName: showsOutline ? "sidebar.trailing" : "list.bullet.indent")
+                        }
+                        .help(showsOutline ? "목차 닫기 (⌘⌥T)" : "목차 열기 (⌘⌥T)")
                     }
                 }
-                .pickerStyle(.segmented)
-                .help("뷰어 / 에디터 / 분할")
-
-                Button {
-                    showsOutline.toggle()
-                } label: {
-                    Image(systemName: "list.bullet.indent")
-                }
-                .help("목차 (⌘⌥T)")
-            }
         }
+        .navigationTitle(store.folderURL?.lastPathComponent ?? "Mermark")
         .inspector(isPresented: $showsOutline) {
             outline
                 .inspectorColumnWidth(min: 180, ideal: 240, max: 360)
@@ -182,6 +185,7 @@ struct ContentView: View {
             let name = store.selectedNoteURL?.deletingPathExtension().lastPathComponent ?? "document"
             preview.exportPDF(defaultName: name)
         }
+        preview.onToggleTask = { store.toggleTask(atLine: $0) }
         preview.onOpenNote = { noteURL, anchor in
             store.select(noteURL)
             if let anchor { preview.scroll(toAnchor: anchor) }

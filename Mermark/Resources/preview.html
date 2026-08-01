@@ -58,6 +58,9 @@
   }
   .frontmatter .fm-key { font-weight: 600; opacity: 0.7; }
   .frontmatter .fm-value { white-space: pre-wrap; }
+  li.task-item { list-style: none; margin-left: -1.4em; }
+  li.task-item input[type="checkbox"] { margin-right: 6px; vertical-align: middle; }
+  li.task-item.done { color: rgba(127, 127, 127, 0.85); text-decoration: line-through; }
 </style>
 <script src="markdown-it.min.js"></script>
 <script src="highlight.min.js"></script>
@@ -165,6 +168,16 @@
     });
   });
 
+  // 목록 항목마다 원본 줄 번호를 남긴다. 체크박스를 눌렀을 때 어느 줄을 고칠지 알아야 한다.
+  // 스크롤 앵커(data-line)와 섞이면 앵커가 중복되므로 이름을 따로 쓴다.
+  md.core.ruler.push("mermark_task_lines", (state) => {
+    for (const token of state.tokens) {
+      if (token.type === "list_item_open" && token.map) {
+        token.attrSet("data-task-line", String(token.map[0]));
+      }
+    }
+  });
+
   // 최상위 블록마다 원본 줄 번호를 심는다 (에디터 ↔ 프리뷰 스크롤 동기화의 앵커)
   md.core.ruler.push("mermark_line_numbers", (state) => {
     for (const token of state.tokens) {
@@ -218,6 +231,39 @@
     }
   }
 
+  // markdown-it은 GFM 할 일 목록을 모르기 때문에 "[x] 내용"이 글자 그대로 남는다.
+  // 렌더 후 앞의 대괄호를 실제 체크박스로 바꾸고, 누르면 원본 줄을 고치도록 연결한다.
+  function renderTaskLists() {
+    for (const item of document.querySelectorAll("#content li")) {
+      const first = item.firstElementChild;
+      const host = first && first.tagName === "P" ? first : item;
+      const node = host.firstChild;
+      if (!node || node.nodeType !== Node.TEXT_NODE) continue;
+
+      const match = node.textContent.match(/^\[([ xX])\]\s+/);
+      if (!match) continue;
+
+      const checked = match[1].toLowerCase() === "x";
+      node.textContent = node.textContent.slice(match[0].length);
+
+      const box = document.createElement("input");
+      box.type = "checkbox";
+      box.checked = checked;
+      const line = item.dataset.taskLine;
+      if (line === undefined) {
+        box.disabled = true;
+      } else {
+        box.addEventListener("change", () => {
+          window.webkit?.messageHandlers?.toggleTask?.postMessage(Number(line));
+        });
+      }
+
+      host.insertBefore(box, node);
+      item.classList.add("task-item");
+      if (checked) item.classList.add("done");
+    }
+  }
+
   // 상대경로 링크도 같은 스킴으로 바꾼다. Swift가 가로채 앱 안에서 노트를 연다.
   function resolveLocalLinks() {
     for (const anchor of document.querySelectorAll("#content a")) {
@@ -233,6 +279,7 @@
     document.getElementById("content").innerHTML = md.render(markdown);
     resolveLocalImages();
     resolveLocalLinks();
+    renderTaskLists();
     lastReportedLine = -1;
     try {
       await mermaid.run({ nodes: document.querySelectorAll("pre.mermaid") });

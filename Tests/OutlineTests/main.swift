@@ -85,5 +85,41 @@ check("프론트매터는 헤딩으로 잡히지 않음", !titles(korean).contai
 check("빈 문서는 빈 목차", titles("").isEmpty)
 check("헤딩 없는 문서는 빈 목차", titles("그냥 본문\n두 번째 줄").isEmpty)
 
+print("\n── 밑줄(setext) 헤딩 (이슈 #3)")
+let setext = """
+문서 제목
+=========
+
+본문입니다.
+
+두 번째 섹션
+----------
+
+## ATX도 섞여 있음
+"""
+check("=== 는 1단계", levels(setext).first == 1, "\(levels(setext))")
+check("--- 는 2단계", levels(setext) == [1, 2, 2], "\(levels(setext))")
+check("제목 글자를 가져옴", titles(setext) == ["문서 제목", "두 번째 섹션", "ATX도 섞여 있음"],
+      "\(titles(setext))")
+// 눌렀을 때 밑줄이 아니라 글자가 있는 줄로 가야 한다
+check("줄 번호는 밑줄이 아닌 글자 줄", lines(setext) == [0, 5, 8], "\(lines(setext))")
+
+check("밑줄 하나만 있어도 인식", titles("제목\n=") == ["제목"], "\(titles("제목\n="))")
+
+print("\n── 밑줄로 오해하면 안 되는 것")
+check("빈 줄 뒤의 --- 는 수평선", titles("본문\n\n---\n\n다음").isEmpty,
+      "\(titles("본문\n\n---\n\n다음"))")
+check("목록 뒤의 --- 도 수평선", titles("- 항목\n---").isEmpty, "\(titles("- 항목\n---"))")
+check("인용 뒤의 --- 도 아님", titles("> 인용\n---").isEmpty, "\(titles("> 인용\n---"))")
+check("표 구분선은 제목이 아님", titles("| a | b |\n|---|---|").isEmpty,
+      "\(titles("| a | b |\n|---|---|"))")
+check("프론트매터 안은 제목이 아님",
+      titles("---\ntitle: 보고서\n---\n\n# 진짜 제목") == ["진짜 제목"],
+      "\(titles("---\ntitle: 보고서\n---\n\n# 진짜 제목"))")
+check("코드 펜스 안의 밑줄도 아님",
+      titles("```\n제목\n===\n```\n\n# 밖의 제목") == ["밖의 제목"],
+      "\(titles("```\n제목\n===\n```\n\n# 밖의 제목"))")
+check("문서 첫 줄이 밑줄이면 무시", titles("===\n본문").isEmpty, "\(titles("===\n본문"))")
+
 print("\n" + (failures.isEmpty ? "ALL PASS (\(total) checks)" : "FAILURES(\(failures.count)/\(total)): \(failures.joined(separator: ", "))"))
 exit(failures.isEmpty ? 0 : 1)

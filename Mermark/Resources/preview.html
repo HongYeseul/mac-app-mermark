@@ -5,6 +5,22 @@
 <link rel="stylesheet" href="github.min.css" media="(prefers-color-scheme: light)">
 <link rel="stylesheet" href="github-dark.min.css" media="(prefers-color-scheme: dark)">
 <link rel="stylesheet" href="katex.min.css">
+<!-- 앱이 실행 중에 고른 테마 색을 여기에 넣는다. 아래는 앱 없이 열어볼 때의 기본값. -->
+<style id="brand-vars">
+  :root {
+    --brand-logo: #45c7b6;
+    --brand-accent: #17786b;
+    --brand-tint: rgba(69, 199, 182, 0.16);
+    --brand-tint-strong: rgba(69, 199, 182, 0.30);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --brand-accent: #7edccc;
+      --brand-tint: rgba(126, 220, 204, 0.22);
+      --brand-tint-strong: rgba(126, 220, 204, 0.34);
+    }
+  }
+</style>
 <style>
   :root { color-scheme: light dark; }
   body {
@@ -25,22 +41,68 @@
   .mermaid-block { position: relative; }
   .mermaid-toolbar {
     position: absolute;
-    top: 4px;
-    right: 4px;
+    top: 6px;
+    right: 6px;
     display: none;
-    gap: 4px;
+    gap: 2px;
+    padding: 3px;
+    border-radius: 9px;
+    background: color-mix(in srgb, Canvas 78%, transparent);
+    box-shadow: 0 1px 5px rgba(0, 0, 0, 0.14), 0 0 0 1px rgba(127, 127, 127, 0.18);
+    backdrop-filter: blur(10px);
   }
   .mermaid-block:hover .mermaid-toolbar { display: flex; }
-  .mermaid-toolbar button {
-    font: 12px -apple-system, "Apple SD Gothic Neo", sans-serif;
-    padding: 3px 8px;
+  .mermaid-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    height: 24px;
+    padding: 0 7px;
+    border: 0;
     border-radius: 6px;
-    border: 1px solid rgba(127, 127, 127, 0.4);
-    background: Canvas;
-    color: CanvasText;
+    background: transparent;
+    color: color-mix(in srgb, CanvasText 70%, transparent);
+    font: 600 10.5px/1 -apple-system, "Apple SD Gothic Neo", sans-serif;
+    letter-spacing: 0.02em;
     cursor: pointer;
   }
-  .mermaid-toolbar button:hover { background: rgba(127, 127, 127, 0.15); }
+  .mermaid-action:hover {
+    background: var(--brand-tint);
+    color: var(--brand-accent);
+  }
+  .mermaid-action:active { background: var(--brand-tint-strong); }
+  .mermaid-menu-wrap { position: relative; display: inline-flex; }
+  .mermaid-menu {
+    display: none;
+    position: absolute;
+    top: calc(100% + 5px);
+    right: 0;
+    min-width: 92px;
+    padding: 4px;
+    border-radius: 8px;
+    background: Canvas;
+    box-shadow: 0 3px 12px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(127, 127, 127, 0.2);
+    z-index: 2;
+  }
+  .mermaid-menu-wrap.open .mermaid-menu { display: block; }
+  .mermaid-menu button {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    width: 100%;
+    height: 26px;
+    padding: 0 8px;
+    border: 0;
+    border-radius: 5px;
+    background: transparent;
+    color: CanvasText;
+    font: 12px/1 -apple-system, "Apple SD Gothic Neo", sans-serif;
+    text-align: left;
+    cursor: pointer;
+  }
+  .mermaid-menu button:hover { background: var(--brand-tint); color: var(--brand-accent); }
+  .mermaid-menu .kind { font-weight: 700; font-size: 10.5px; letter-spacing: 0.03em; }
+  .mermaid-menu .note { margin-left: auto; opacity: 0.5; font-size: 10.5px; }
   table { border-collapse: collapse; }
   th, td { border: 1px solid rgba(127, 127, 127, 0.35); padding: 4px 10px; }
   blockquote { margin: 0; padding-left: 1em; border-left: 3px solid rgba(127, 127, 127, 0.4); opacity: 0.85; }
@@ -61,23 +123,19 @@
   li.task-item { list-style: none; margin-left: -1.4em; }
   li.task-item input[type="checkbox"] { margin-right: 6px; vertical-align: middle; }
   li.task-item.done { color: rgba(127, 127, 127, 0.85); text-decoration: line-through; }
-  /* 메인 색상(민트). Brand.swift와 같은 값을 쓴다 — 한쪽만 고치면 어긋난다 */
+  /* 메인 색상은 Swift가 #brand-vars에 넣어준다 (Brand.previewCSS) */
   .tag {
     display: inline-block;
     padding: 0 8px;
     border-radius: 10px;
-    background: rgba(69, 199, 182, 0.16);
-    color: #17786b;
+    background: var(--brand-tint);
+    color: var(--brand-accent);
     font-size: 0.88em;
     line-height: 1.5;
     cursor: pointer;
     white-space: nowrap;
   }
-  .tag:hover { background: rgba(69, 199, 182, 0.3); }
-  @media (prefers-color-scheme: dark) {
-    .tag { background: rgba(126, 220, 204, 0.22); color: #7edccc; }
-    .tag:hover { background: rgba(126, 220, 204, 0.34); }
-  }
+  .tag:hover { background: var(--brand-tint-strong); }
 </style>
 <script src="markdown-it.min.js"></script>
 <script src="highlight.min.js"></script>
@@ -204,6 +262,42 @@
     }
   });
 
+  // 호버 툴바 아이콘. 글자 버튼보다 다이어그램을 덜 가리고 무엇을 하는지 바로 보인다.
+  const ICON_COPY =
+    '<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">' +
+    '<rect x="5.75" y="5.75" width="7.5" height="7.5" rx="2" fill="none" stroke="currentColor" stroke-width="1.4"/>' +
+    '<path d="M10.25 3.75H4.5A1.75 1.75 0 0 0 2.75 5.5v5.75" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>' +
+    "</svg>";
+
+  const ICON_DOWNLOAD =
+    '<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">' +
+    '<path d="M8 2.75v6.5m0 0 2.75-2.75M8 9.25 5.25 6.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>' +
+    '<path d="M2.75 11.25v1.25a.75.75 0 0 0 .75.75h9a.75.75 0 0 0 .75-.75v-1.25" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>' +
+    "</svg>";
+
+  const ICON_CARET =
+    '<svg viewBox="0 0 10 10" width="8" height="8" aria-hidden="true">' +
+    '<path d="M2.5 4l2.5 2.5L7.5 4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>' +
+    "</svg>";
+
+  /// 복사 버튼 하나와 "저장" 메뉴 하나. 버튼을 늘어놓으면 다이어그램을 가린다.
+  function toolbarMarkup() {
+    return '<div class="mermaid-toolbar">' +
+      '<button class="mermaid-action" type="button" data-export="copyPNG"' +
+      ' title="PNG를 클립보드로 복사" aria-label="PNG를 클립보드로 복사">' + ICON_COPY + "</button>" +
+      '<div class="mermaid-menu-wrap">' +
+        '<button class="mermaid-action" type="button" data-menu="toggle"' +
+        ' title="파일로 저장" aria-label="파일로 저장">' + ICON_DOWNLOAD + ICON_CARET + "</button>" +
+        '<div class="mermaid-menu">' +
+          '<button type="button" data-export="savePNG">' +
+            '<span class="kind">PNG</span><span class="note">그림</span></button>' +
+          '<button type="button" data-export="saveSVG">' +
+            '<span class="kind">SVG</span><span class="note">벡터</span></button>' +
+        "</div>" +
+      "</div>" +
+    "</div>";
+  }
+
   // ```mermaid 펜스는 하이라이트 대신 mermaid 렌더 대상으로 치환.
   // 내보내기용 원본 코드는 data-code(URI 인코딩)로 보존한다 — mermaid.run이 내용을 SVG로 바꾸기 때문.
   const defaultFence = md.renderer.rules.fence;
@@ -213,11 +307,7 @@
     if (token.info.trim() === "mermaid") {
       return (
         '<div class="mermaid-block" data-line="' + line + '" data-code="' + encodeURIComponent(token.content) + '">' +
-        '<div class="mermaid-toolbar">' +
-        '<button onclick="exportMermaid(this, \'copyPNG\')">PNG 복사</button>' +
-        '<button onclick="exportMermaid(this, \'savePNG\')">PNG 저장</button>' +
-        '<button onclick="exportMermaid(this, \'saveSVG\')">SVG 저장</button>' +
-        "</div>" +
+        toolbarMarkup() +
         '<pre class="mermaid">' + escapeHtml(token.content) + "</pre>" +
         "</div>"
       );
@@ -228,11 +318,33 @@
     return '<div data-line="' + line + '">' + defaultFence(tokens, idx, options, env, self) + "</div>";
   };
 
-  window.exportMermaid = (button, action) => {
-    const block = button.closest(".mermaid-block");
-    const code = decodeURIComponent(block.dataset.code);
-    window.webkit?.messageHandlers?.mermaidExport?.postMessage({ action, code });
-  };
+  function closeExportMenus(except) {
+    for (const wrap of document.querySelectorAll(".mermaid-menu-wrap.open")) {
+      if (wrap !== except) wrap.classList.remove("open");
+    }
+  }
+
+  document.addEventListener("click", (event) => {
+    const toggle = event.target.closest?.("[data-menu='toggle']");
+    if (toggle) {
+      const wrap = toggle.closest(".mermaid-menu-wrap");
+      const willOpen = !wrap.classList.contains("open");
+      closeExportMenus(wrap);
+      wrap.classList.toggle("open", willOpen);
+      return;
+    }
+
+    const action = event.target.closest?.("[data-export]");
+    closeExportMenus(null);
+    if (!action) return;
+
+    const block = action.closest(".mermaid-block");
+    if (!block) return;
+    window.webkit?.messageHandlers?.mermaidExport?.postMessage({
+      action: action.dataset.export,
+      code: decodeURIComponent(block.dataset.code),
+    });
+  });
 
   // 노트 기준 상대경로 이미지는 앱이 서빙하는 전용 스킴으로 바꾼다.
   // "/"로 시작하면 노트 폴더 최상위 기준, 아니면 노트가 든 폴더 기준.
@@ -401,6 +513,11 @@
       anchor.setAttribute("href", "mermark-local://" + host + "/" + href.replace(/^\/+/, ""));
     }
   }
+
+  /// 앱이 고른 테마 색을 넣는다
+  window.applyBrandCSS = (css) => {
+    document.getElementById("brand-vars").textContent = css;
+  };
 
   window.renderMarkdown = async (markdown) => {
     document.getElementById("content").innerHTML = md.render(encodePathSpaces(markdown));

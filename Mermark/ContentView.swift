@@ -28,6 +28,8 @@ struct ContentView: View {
     @StateObject private var preview = PreviewController()
     @AppStorage("viewMode") private var mode: ViewMode = .split
     @AppStorage("showsOutline") private var showsOutline = false
+    /// 테마가 바뀔 때 화면을 다시 그리기 위한 값
+    @State private var themeRevision = 0
 
     private var headings: [Heading] {
         MarkdownOutline.headings(in: store.currentText)
@@ -97,7 +99,14 @@ struct ContentView: View {
             outline
                 .inspectorColumnWidth(min: 180, ideal: 240, max: 360)
         }
-        .onAppear(perform: connectScrollSync)
+        .onAppear {
+            connectScrollSync()
+            Brand.applyDockIcon()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: Brand.didChange)) { _ in
+            preview.applyBrandColors()
+            themeRevision += 1        // 사이드바 색을 다시 그리게 한다
+        }
     }
 
     /// 누르면 그 태그만 보고, 다시 누르면 전체로 돌아간다

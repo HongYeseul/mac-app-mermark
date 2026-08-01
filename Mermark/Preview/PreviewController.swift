@@ -116,7 +116,16 @@ final class PreviewController: NSObject, ObservableObject, WKNavigationDelegate,
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         isPageReady = true
+        applyBrandColors()
         renderNow()
+    }
+
+    /// 고른 테마 색을 프리뷰에 넣는다. 값을 Swift에서 만들어 넘기므로 두 벌로 어긋나지 않는다.
+    func applyBrandColors() {
+        guard isPageReady,
+              let data = try? JSONEncoder().encode(Brand.previewCSS()),
+              let json = String(data: data, encoding: .utf8) else { return }
+        webView.evaluateJavaScript("window.applyBrandCSS(\(json));")
     }
 
     /// 프리뷰 페이지가 다른 문서로 바뀌지 않도록 링크 이동을 가로챈다 (PLAN.md 5)

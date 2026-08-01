@@ -40,6 +40,10 @@ final class EditorController: NSObject, ObservableObject, NSTextViewDelegate {
             self, selector: #selector(boundsDidChange),
             name: NSView.boundsDidChangeNotification, object: scrollView.contentView
         )
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(highlightNow),
+            name: Brand.didChange, object: nil
+        )
     }
 
     var text: String { textView.string }
@@ -110,7 +114,7 @@ final class EditorController: NSObject, ObservableObject, NSTextViewDelegate {
         DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
     }
 
-    private func highlightNow() {
+    @objc private func highlightNow() {
         guard let storage = textView.textStorage else { return }
         let fullRange = NSRange(location: 0, length: (textView.string as NSString).length)
 
@@ -125,6 +129,7 @@ final class EditorController: NSObject, ObservableObject, NSTextViewDelegate {
         textView.typingAttributes = [.font: Self.baseFont, .foregroundColor: NSColor.textColor]
     }
 
+    // 테마가 바뀌면 색을 다시 읽어야 하므로 상수가 아니라 그때그때 만든다
     private static func attributes(for kind: MarkdownSyntax.Token.Kind) -> [NSAttributedString.Key: Any] {
         switch kind {
         case .heading(let level):

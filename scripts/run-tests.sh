@@ -49,6 +49,7 @@ run_suite image-resources  "$ROOT/Tests/ImageResourceTests/main.swift"
 run_suite link-routing     "$ROOT/Tests/LinkRoutingTests/main.swift"
 run_suite document-export  "$ROOT/Tests/DocumentExportTests/main.swift"
 run_suite math             "$ROOT/Tests/MathTests/main.swift"
+run_suite theme            "$ROOT/Tests/ThemeTests/main.swift"
 run_suite view-mode        "$ROOT/Tests/ViewModeTests/main.swift"
 
 if [ "$failed" -eq 0 ]; then

@@ -1,28 +1,31 @@
 import SwiftUI
 import AppKit
 
-/// 앱의 메인 색상(민트). 로고와 같은 색조를 UI 전반에서 쓴다.
+/// 지금 고른 테마의 색을 앱 곳곳에 나눠주는 곳.
 ///
-/// 한 가지 색을 그대로 쓰지 않고 단계를 나눈다. 파스텔 톤은 넓은 면적(로고)에서 좋지만
-/// 흰 배경 위의 글자로 쓰면 대비가 모자라기 때문이다.
-/// - 로고·큰 면적: `logoHex`
-/// - 글자·아이콘: `accent` (라이트에서 진하게, 다크에서 밝게)
-/// - 태그 배경 같은 옅은 면: `tintHex`
-///
-/// 프리뷰(`Resources/preview.html`)의 CSS도 같은 값을 쓰므로 함께 고쳐야 한다.
+/// 색 값 자체는 `Theme`에, 프리뷰(웹뷰)로 넘길 CSS는 `previewCSS`에 있다.
+/// 프리뷰 CSS를 여기서 만들어 주입하므로 Swift와 HTML에 같은 값이 두 벌 생기지 않는다.
 enum Brand {
-    static let logoHex = "#45C7B6"
-    static let tintHex = "#E4F6F2"
+    /// 테마가 바뀌면 올라간다. 화면들이 이 값을 보고 다시 그린다.
+    static let didChange = Notification.Name("MermarkBrandDidChange")
 
-    /// 글자·아이콘용. 라이트 #17786B, 다크 #7EDCCC
-    static let accentNSColor = NSColor(name: "MermarkAccent") { appearance in
-        isDark(appearance)
-            ? NSColor(srgbRed: 0.494, green: 0.863, blue: 0.800, alpha: 1)
-            : NSColor(srgbRed: 0.090, green: 0.471, blue: 0.420, alpha: 1)
+    static var theme: Theme { Theme.current }
+
+    static func select(_ theme: Theme) {
+        UserDefaults.standard.set(theme.rawValue, forKey: Theme.storageKey)
+        applyDockIcon()
+        NotificationCenter.default.post(name: didChange, object: nil)
     }
 
-    /// 코드용. 메인 색과 같은 청록 계열이면 헷갈리므로 차분한 슬레이트로 둔다.
-    /// 라이트 #6B7A8F, 다크 #9BB0C7
+    /// 글자·아이콘용. 라이트에서 진하게, 다크에서 밝게.
+    static var accentNSColor: NSColor {
+        let theme = self.theme
+        return NSColor(name: nil) { appearance in
+            isDark(appearance) ? theme.accentDark.nsColor : theme.accentLight.nsColor
+        }
+    }
+
+    /// 코드용. 메인 색과 같은 계열이면 헷갈리므로 차분한 슬레이트로 둔다.
     static let codeNSColor = NSColor(name: "MermarkCode") { appearance in
         isDark(appearance)
             ? NSColor(srgbRed: 0.608, green: 0.690, blue: 0.780, alpha: 1)
@@ -30,6 +33,31 @@ enum Brand {
     }
 
     static var accent: Color { Color(nsColor: accentNSColor) }
+
+    /// 실행 중에 Dock 아이콘을 다시 그린다.
+    /// 번들 안의 .icns(= Finder에 보이는 아이콘)는 그대로다.
+    static func applyDockIcon() {
+        NSApp?.applicationIconImage = AppIcon.image(for: theme, pixels: 512)
+    }
+
+    /// 프리뷰에 넣을 CSS 변수. 웹뷰는 Swift 상수를 못 쓰므로 값을 만들어 넘긴다.
+    static func previewCSS(for theme: Theme = Theme.current) -> String {
+        """
+        :root {
+          --brand-logo: \(theme.logo.cssHex);
+          --brand-accent: \(theme.accentLight.cssHex);
+          --brand-tint: \(theme.logo.cssRGBA(alpha: 0.16));
+          --brand-tint-strong: \(theme.logo.cssRGBA(alpha: 0.30));
+        }
+        @media (prefers-color-scheme: dark) {
+          :root {
+            --brand-accent: \(theme.accentDark.cssHex);
+            --brand-tint: \(theme.accentDark.cssRGBA(alpha: 0.22));
+            --brand-tint-strong: \(theme.accentDark.cssRGBA(alpha: 0.34));
+          }
+        }
+        """
+    }
 
     private static func isDark(_ appearance: NSAppearance) -> Bool {
         appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua

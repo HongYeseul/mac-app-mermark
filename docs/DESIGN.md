@@ -46,13 +46,20 @@ Mermark의 색과 아이콘을 어떻게 정했는지, 어디를 고쳐야 하�
 - **목록 표시(주황)** — 민트의 보색 쪽이라 오히려 구분이 쉬워 유지했습니다.
 - **링크(파랑)** — 링크가 파랑인 것은 오래된 관습이라 바꾸지 않았습니다.
 
+### 테마
+
+설정(`⌘,`)에서 다섯 가지 중 고를 수 있습니다 — 민트·세이지·제이드·코퍼·플럼.
+고른 색은 에디터 강조, 프리뷰 태그·툴바, 사이드바 선택, 그리고 **Dock 아이콘**에 함께 적용됩니다.
+
+Finder에 보이는 아이콘은 앱 번들 안의 `.icns`라 실행 중에는 바뀌지 않습니다.
+바꾸려면 번들을 고쳐야 하는데 코드 서명이 깨지므로 하지 않습니다.
+Dock 아이콘은 `NSApplication.applicationIconImage`로 실행 중에 다시 그립니다.
+
 ### 고칠 때 주의할 점
 
-정의는 [`Mermark/Brand.swift`](../Mermark/Brand.swift)에 모여 있습니다.
-다만 프리뷰는 웹뷰라 Swift 상수를 쓸 수 없어
-[`Mermark/Resources/preview.html`](../Mermark/Resources/preview.html)의 CSS에 **같은 값이 한 벌 더** 있습니다.
-한쪽만 고치면 색이 어긋납니다. 양쪽 파일에 서로를 가리키는 주석을 달아두었고,
-근본 해결(CSS 변수로 빼고 Swift가 주입)은 [이슈 #9](https://github.com/HongYeseul/mac-app-mermark/issues/9)에 있습니다.
+색 값은 [`Mermark/Theme.swift`](../Mermark/Theme.swift) 한 곳에만 있습니다.
+프리뷰(웹뷰)는 Swift 상수를 쓸 수 없지만, `Brand.previewCSS()`가 CSS 변수를 만들어
+주입하므로 값이 두 벌로 갈라지지 않습니다. `preview.html`은 `var(--brand-*)`만 참조합니다.
 
 ---
 
@@ -77,9 +84,13 @@ Mermaid 흐름도의 생김새를 그대로 줄인 모양입니다.
 이미지 편집기 없이 코드로 그립니다.
 
 ```bash
-swift scripts/make-icon.swift /tmp/Mermark.iconset
+swiftc -o /tmp/make-icon Mermark/Theme.swift Mermark/AppIcon.swift scripts/make-icon/main.swift
+/tmp/make-icon /tmp/Mermark.iconset mint
 iconutil -c icns /tmp/Mermark.iconset -o Mermark/Resources/Mermark.icns
 ```
+
+그리는 코드는 앱과 공유합니다(`Mermark/AppIcon.swift`). 폴더 이름은 `iconutil` 요구대로
+`.iconset`으로 끝나야 합니다.
 
 `CFBundleIconFile`은 Xcode의 Info.plist 자동 생성이 지원하지 않는 키라
 [`Config/Info.plist`](../Config/Info.plist)에 직접 적고, 나머지 키는 자동 생성분과 병합됩니다.

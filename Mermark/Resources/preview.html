@@ -61,6 +61,22 @@
   li.task-item { list-style: none; margin-left: -1.4em; }
   li.task-item input[type="checkbox"] { margin-right: 6px; vertical-align: middle; }
   li.task-item.done { color: rgba(127, 127, 127, 0.85); text-decoration: line-through; }
+  .tag {
+    display: inline-block;
+    padding: 0 8px;
+    border-radius: 10px;
+    background: rgba(120, 85, 215, 0.14);
+    color: #5b3fc4;
+    font-size: 0.88em;
+    line-height: 1.5;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .tag:hover { background: rgba(120, 85, 215, 0.26); }
+  @media (prefers-color-scheme: dark) {
+    .tag { background: rgba(165, 135, 255, 0.22); color: #bcaaff; }
+    .tag:hover { background: rgba(165, 135, 255, 0.34); }
+  }
 </style>
 <script src="markdown-it.min.js"></script>
 <script src="highlight.min.js"></script>
@@ -317,6 +333,63 @@
     }
   }
 
+  // 본문의 #태그를 알약 모양으로 바꿔 한눈에 보이게 한다.
+  // 코드·링크 안은 건드리지 않고, 규칙은 MarkdownTags.swift와 같게 맞춘다.
+  const TAG_PATTERN = /(^|\s)#([\p{L}\p{N}_][\p{L}\p{N}_/-]*)/gu;
+
+  function renderTags() {
+    const content = document.getElementById("content");
+    const walker = document.createTreeWalker(content, NodeFilter.SHOW_TEXT, {
+      acceptNode(node) {
+        for (let el = node.parentElement; el && el !== content; el = el.parentElement) {
+          const name = el.tagName;
+          if (name === "CODE" || name === "PRE" || name === "A" || el.classList.contains("tag")) {
+            return NodeFilter.FILTER_REJECT;
+          }
+        }
+        TAG_PATTERN.lastIndex = 0;
+        return TAG_PATTERN.test(node.textContent) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+      },
+    });
+
+    // 순회 중 DOM을 바꾸면 walker가 어긋나므로 먼저 모아 둔다
+    const targets = [];
+    while (walker.nextNode()) targets.push(walker.currentNode);
+    for (const node of targets) wrapTagsInTextNode(node);
+  }
+
+  function wrapTagsInTextNode(node) {
+    const text = node.textContent;
+    const fragment = document.createDocumentFragment();
+    let cursor = 0;
+    let match;
+
+    TAG_PATTERN.lastIndex = 0;
+    while ((match = TAG_PATTERN.exec(text)) !== null) {
+      const start = match.index + match[1].length;   // "#"이 시작하는 위치
+      if (start > cursor) fragment.appendChild(document.createTextNode(text.slice(cursor, start)));
+
+      const pill = document.createElement("span");
+      pill.className = "tag";
+      pill.textContent = "#" + match[2];
+      pill.dataset.tag = match[2];
+      pill.title = "이 태그로 거르기";
+      fragment.appendChild(pill);
+      cursor = TAG_PATTERN.lastIndex;
+    }
+    if (!fragment.childNodes.length) return;
+
+    if (cursor < text.length) fragment.appendChild(document.createTextNode(text.slice(cursor)));
+    node.parentNode.replaceChild(fragment, node);
+  }
+
+  // 태그를 누르면 사이드바 필터가 그 태그로 바뀐다
+  document.getElementById("content").addEventListener("click", (event) => {
+    const pill = event.target.closest?.(".tag");
+    if (!pill) return;
+    window.webkit?.messageHandlers?.selectTag?.postMessage(pill.dataset.tag);
+  });
+
   // 상대경로 링크도 같은 스킴으로 바꾼다. Swift가 가로채 앱 안에서 노트를 연다.
   function resolveLocalLinks() {
     for (const anchor of document.querySelectorAll("#content a")) {
@@ -333,6 +406,7 @@
     resolveLocalImages();
     resolveLocalLinks();
     renderTaskLists();
+    renderTags();
     lastReportedLine = -1;
     try {
       await mermaid.run({ nodes: document.querySelectorAll("pre.mermaid") });

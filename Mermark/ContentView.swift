@@ -186,6 +186,7 @@ struct ContentView: View {
             preview.exportPDF(defaultName: name)
         }
         preview.onToggleTask = { store.toggleTask(atLine: $0) }
+        preview.onSelectTag = { store.toggleTag($0) }
         preview.onOpenNote = { noteURL, anchor in
             store.select(noteURL)
             if let anchor { preview.scroll(toAnchor: anchor) }

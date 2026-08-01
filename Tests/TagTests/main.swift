@@ -1,6 +1,7 @@
 import AppKit
+import WebKit
 
-// 태그 추출 규칙과 태그 필터를 확인한다.
+// 태그 추출 규칙, 태그 필터, 프리뷰 표시를 확인한다.
 
 var failures: [String] = []
 var total = 0
@@ -147,5 +148,102 @@ store.toggleTag("검토")
 check("외부 수정 후 태그 갱신",
       Set(store.filteredNotes.map(\.title)) == ["정산 노트", "잡담"], "\(store.filteredNotes.map(\.title))")
 
-print("\n" + (failures.isEmpty ? "ALL PASS (\(total) checks)" : "FAILURES(\(failures.count)/\(total)): \(failures.joined(separator: ", "))"))
-exit(failures.isEmpty ? 0 : 1)
+// MARK: - E. 프리뷰에서의 태그 표시
+
+guard let resourcePath = ProcessInfo.processInfo.environment["MERMARK_RESOURCES"] else {
+    print("FAIL: MERMARK_RESOURCES 환경변수가 필요합니다")
+    exit(2)
+}
+let resources = URL(fileURLWithPath: resourcePath)
+
+let webView = WKWebView(frame: NSRect(x: 0, y: 0, width: 700, height: 600))
+final class Nav: NSObject, WKNavigationDelegate {
+    var onReady: (() -> Void)?
+    func webView(_ w: WKWebView, didFinish n: WKNavigation!) { onReady?(); onReady = nil }
+}
+let nav = Nav()
+webView.navigationDelegate = nav
+
+func finish() {
+    try? fm.removeItem(at: folder)
+    print("\n" + (failures.isEmpty ? "ALL PASS (\(total) checks)" : "FAILURES(\(failures.count)/\(total)): \(failures.joined(separator: ", "))"))
+    exit(failures.isEmpty ? 0 : 1)
+}
+
+let previewDoc = """
+# 정산 메모
+
+#문서 정리 필요. 중첩 표기 #프로젝트/메르마크 도 있다.
+
+주소는 태그가 아님: https://example.com/a#section
+
+인라인 코드 `#코드안` 도 아님
+
+[링크 안 #태그](./a.md) 는 건드리지 않음
+
+```bash
+# 주석
+echo "#가짜"
+```
+"""
+
+nav.onReady = {
+    let encoded = String(data: try! JSONEncoder().encode(previewDoc), encoding: .utf8)!
+    webView.evaluateJavaScript("window.renderMarkdown(\(encoded));") { _, _ in
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+            let script = """
+            const pills = [...document.querySelectorAll("#content .tag")];
+            const style = pills.length ? getComputedStyle(pills[0]) : null;
+            return JSON.stringify({
+              names: pills.map(p => p.dataset.tag),
+              texts: pills.map(p => p.textContent),
+              hasBackground: style ? style.backgroundColor !== "rgba(0, 0, 0, 0)" : false,
+              isRounded: style ? parseFloat(style.borderRadius) > 0 : false,
+              differsFromBody: style ? style.color !== getComputedStyle(document.body).color : false,
+              codeUntouched: (document.querySelector("#content pre code") || {}).textContent || "",
+              inlineCodeUntouched: [...document.querySelectorAll("#content code")]
+                .some(c => c.textContent.includes("#코드안")),
+              // 자동 링크된 주소가 아니라 우리가 쓴 노트 링크를 골라야 한다
+              linkTextUntouched: ([...document.querySelectorAll("#content a")]
+                .find(a => (a.getAttribute("href") || "").includes("a.md")) || {}).textContent || ""
+            });
+            """
+            webView.callAsyncJavaScript(script, in: nil, in: .page) { result in
+                guard case .success(let value) = result,
+                      let json = value as? String,
+                      let data = json.data(using: .utf8),
+                      let r = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                    check("프리뷰 렌더 결과 조회", false, "\(result)")
+                    finish()
+                    return
+                }
+
+                print("\n── E. 프리뷰에서의 태그 표시")
+                let names = r["names"] as? [String] ?? []
+                check("본문 태그만 알약으로 표시", names == ["문서", "프로젝트/메르마크"], "\(names)")
+                check("표시 글자에 # 유지", (r["texts"] as? [String]) == ["#문서", "#프로젝트/메르마크"],
+                      "\(r["texts"] ?? "nil")")
+                check("배경색이 있어 눈에 띔", (r["hasBackground"] as? Bool) == true)
+                check("모서리가 둥근 알약 모양", (r["isRounded"] as? Bool) == true)
+                check("본문과 다른 글자색", (r["differsFromBody"] as? Bool) == true)
+
+                check("코드 펜스 안은 그대로",
+                      (r["codeUntouched"] as? String)?.contains("#가짜") == true, "\(r["codeUntouched"] ?? "nil")")
+                check("인라인 코드 안도 그대로", (r["inlineCodeUntouched"] as? Bool) == true)
+                check("링크 안의 #태그는 건드리지 않음",
+                      (r["linkTextUntouched"] as? String)?.contains("#태그") == true,
+                      "\(r["linkTextUntouched"] ?? "nil")")
+                check("주소의 프래그먼트는 태그가 아님", !names.contains("section"), "\(names)")
+
+                finish()
+            }
+        }
+    }
+}
+
+webView.loadFileURL(resources.appendingPathComponent("preview.html"), allowingReadAccessTo: resources)
+DispatchQueue.main.asyncAfter(deadline: .now() + 60) {
+    check("시간 초과 없이 완료", false, "timeout")
+    finish()
+}
+app.run()

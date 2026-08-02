@@ -55,24 +55,10 @@ struct ContentView: View {
             .navigationSplitViewColumnWidth(min: 200, ideal: 240)
         } detail: {
             detail
-                // 툴바를 detail에 붙여야 항목이 사이드바 쪽으로 몰려 잘리지 않는다
+                // 툴바를 detail에 붙여야 항목이 사이드바 쪽으로 몰려 잘리지 않는다.
+                // 새 노트와 작업 공간 연결은 탭 줄의 +, 작업 공간 헤더의 +,
+                // 사이드바 "작업 공간 추가"에 이미 있어 여기 두지 않는다.
                 .toolbar {
-                    ToolbarItemGroup(placement: .navigation) {
-                        Button {
-                            store.createNoteChoosingWorkspaceIfNeeded()
-                        } label: {
-                            Image(systemName: "square.and.pencil")
-                        }
-                        .help("새 노트 (⌘N)")
-
-                        Button {
-                            store.connectWorkspace()
-                        } label: {
-                            Image(systemName: "plus.rectangle.on.folder")
-                        }
-                        .help("작업 공간 연결 (⌘O)")
-                    }
-
                     ToolbarItemGroup(placement: .primaryAction) {
                         Picker("보기 모드", selection: $mode) {
                             ForEach(ViewMode.allCases) { mode in

@@ -68,7 +68,7 @@ struct NoteTabBar: View {
             Button("이 탭만 남기기") { store.closeOtherTabs(url) }
             Divider()
             Button("Finder에서 보기") { store.revealInFinder(url) }
-            Button("휴지통으로 이동") { store.moveToTrash(url) }
+            Button("휴지통으로 이동") { store.requestTrash(url) }
         }
     }
 

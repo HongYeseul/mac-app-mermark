@@ -91,6 +91,14 @@ struct ContentView: View {
         .navigationSubtitle(currentWorkspace?.displayPath ?? "")
         // 선택 강조·세그먼트 등 시스템 컨트롤까지 메인 색상을 따르게 한다
         .tint(Brand.accent)
+        .alert("휴지통으로 옮길까요?", isPresented: trashConfirmation) {
+            Button("휴지통으로 이동", role: .destructive) { store.confirmTrash() }
+            Button("취소", role: .cancel) { store.cancelTrash() }
+        } message: {
+            if let url = store.noteAwaitingTrash {
+                Text("노트: \(url.deletingPathExtension().lastPathComponent)\nFinder 휴지통에서 되돌릴 수 있습니다.")
+            }
+        }
         .inspector(isPresented: $showsOutline) {
             outline
                 .inspectorColumnWidth(min: 180, ideal: 240, max: 360)
@@ -166,7 +174,7 @@ struct ContentView: View {
             Button("Finder에서 보기") { store.revealInFinder(note.url) }
             Button("경로 복사") { copyPath(note.url) }
             Divider()
-            Button("휴지통으로 이동") { store.moveToTrash(note.url) }
+            Button("휴지통으로 이동") { store.requestTrash(note.url) }
         }
     }
 
@@ -312,6 +320,13 @@ struct ContentView: View {
             store.select(noteURL)
             if let anchor { preview.scroll(toAnchor: anchor) }
         }
+    }
+
+    private var trashConfirmation: Binding<Bool> {
+        Binding(
+            get: { store.noteAwaitingTrash != nil },
+            set: { shown in if !shown { store.cancelTrash() } }
+        )
     }
 
     private var selectionBinding: Binding<URL?> {

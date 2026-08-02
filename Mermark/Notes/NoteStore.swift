@@ -197,6 +197,24 @@ final class NoteStore: ObservableObject {
         NSWorkspace.shared.activateFileViewerSelecting([url])
     }
 
+    /// 확인 창을 띄우려고 잡아 둔 노트. 화면은 이 값만 보고 창을 띄운다.
+    @Published private(set) var noteAwaitingTrash: URL?
+
+    func requestTrash(_ url: URL) {
+        noteAwaitingTrash = url
+    }
+
+    func cancelTrash() {
+        noteAwaitingTrash = nil
+    }
+
+    @discardableResult
+    func confirmTrash() -> URL? {
+        guard let url = noteAwaitingTrash else { return nil }
+        noteAwaitingTrash = nil
+        return moveToTrash(url)
+    }
+
     /// 노트를 휴지통으로 옮긴다. 바로 지우지 않으므로 잘못 눌러도 되돌릴 수 있다.
     @discardableResult
     func moveToTrash(_ url: URL) -> URL? {

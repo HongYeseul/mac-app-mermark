@@ -92,7 +92,32 @@ check("탭이 모두 닫힘", store.openTabs.isEmpty, "\(store.openTabs.map(\.la
 check("선택이 비워짐", store.selectedNoteURL == nil, store.selectedNoteURL?.lastPathComponent ?? "nil")
 check("본문도 비워짐", store.currentText.isEmpty, store.currentText)
 
-print("\n── E. 없는 파일")
+print("\n── E. 확인 창")
+let 확인용 = sandbox.appendingPathComponent("확인용.md")
+write("# 확인용\n", to: 확인용)
+pump(0.8)
+
+check("처음에는 창이 없음", store.noteAwaitingTrash == nil)
+store.requestTrash(확인용)
+check("우클릭하면 창을 띄울 준비만 함", store.noteAwaitingTrash == 확인용,
+      store.noteAwaitingTrash?.lastPathComponent ?? "nil")
+check("아직 파일은 그대로", fm.fileExists(atPath: 확인용.path))
+
+store.cancelTrash()
+check("취소하면 창이 닫힘", store.noteAwaitingTrash == nil)
+check("취소하면 파일도 그대로", fm.fileExists(atPath: 확인용.path))
+check("목록에도 남아 있음", store.notes.contains { $0.url == 확인용 }, "\(store.notes.map(\.title))")
+
+store.requestTrash(확인용)
+let confirmed = store.confirmTrash()
+if let confirmed { leftInTrash.append(confirmed) }
+check("확인하면 옮겨짐", !fm.fileExists(atPath: 확인용.path))
+check("확인하면 휴지통에 있음", confirmed != nil && fm.fileExists(atPath: confirmed!.path),
+      confirmed?.path ?? "nil")
+check("확인 뒤 창이 닫힘", store.noteAwaitingTrash == nil)
+check("잡아 둔 노트가 없으면 아무 일도 없음", store.confirmTrash() == nil)
+
+print("\n── F. 없는 파일")
 check("이미 없는 노트는 조용히 실패", store.moveToTrash(하나) == nil)
 
 // 검증이 휴지통에 남긴 것들을 치운다

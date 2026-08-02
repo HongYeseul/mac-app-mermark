@@ -37,6 +37,14 @@ struct ContentView: View {
         MarkdownOutline.headings(in: store.currentText)
     }
 
+    /// 지금 보고 있는 노트가 속한 작업 공간. 보던 노트가 없으면 하나만 연결됐을 때만 그것.
+    private var currentWorkspace: Workspace? {
+        if let owner = store.workspaceURL(for: store.selectedNoteURL) {
+            return store.workspaces.first { $0.url == owner }
+        }
+        return store.workspaces.count == 1 ? store.workspaces[0] : nil
+    }
+
     var body: some View {
         NavigationSplitView {
             List(selection: selectionBinding) {
@@ -77,9 +85,10 @@ struct ContentView: View {
                     }
                 }
         }
-        .navigationTitle(store.workspaces.count == 1 ? store.workspaces[0].name : "Mermark")
-        // 작업 폴더를 바꿀 수 있으니 지금 어디를 쓰는지 항상 보이게 한다
-        .navigationSubtitle(store.workspaces.count == 1 ? store.workspaces[0].displayPath : "")
+        // 앱 이름은 어차피 Dock과 메뉴 막대에 있다. 제목 자리에는
+        // 지금 보고 있는 노트가 어느 작업 공간 것인지만 둔다.
+        .navigationTitle(currentWorkspace?.name ?? "")
+        .navigationSubtitle(currentWorkspace?.displayPath ?? "")
         // 선택 강조·세그먼트 등 시스템 컨트롤까지 메인 색상을 따르게 한다
         .tint(Brand.accent)
         .inspector(isPresented: $showsOutline) {

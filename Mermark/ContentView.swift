@@ -165,6 +165,8 @@ struct ContentView: View {
         .contextMenu {
             Button("Finder에서 보기") { store.revealInFinder(note.url) }
             Button("경로 복사") { copyPath(note.url) }
+            Divider()
+            Button("휴지통으로 이동") { store.moveToTrash(note.url) }
         }
     }
 

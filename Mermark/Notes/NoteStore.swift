@@ -197,6 +197,26 @@ final class NoteStore: ObservableObject {
         NSWorkspace.shared.activateFileViewerSelecting([url])
     }
 
+    /// 노트를 휴지통으로 옮긴다. 바로 지우지 않으므로 잘못 눌러도 되돌릴 수 있다.
+    @discardableResult
+    func moveToTrash(_ url: URL) -> URL? {
+        if selectedNoteURL == url {
+            // 대기 중인 자동 저장이 방금 지운 파일을 되살리지 않도록 먼저 취소한다
+            saveWorkItem?.cancel()
+            saveWorkItem = nil
+        }
+        var trashed: NSURL?
+        do {
+            try FileManager.default.trashItem(at: url, resultingItemURL: &trashed)
+        } catch {
+            NSLog("%@", "휴지통으로 옮기지 못했습니다: \(error.localizedDescription)")
+            return nil
+        }
+        // 탭을 닫고 옆 노트로 옮겨 가는 일은 reloadNotes 안의 pruneTabs가 맡는다
+        reloadNotes()
+        return trashed as URL?
+    }
+
     private func isUsableFolder(_ path: String) -> Bool {
         var isDirectory: ObjCBool = false
         return FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory)

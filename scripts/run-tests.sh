@@ -66,6 +66,7 @@ run_suite view-mode        "$ROOT/Tests/ViewModeTests/main.swift"
 run_suite cli              "$ROOT/Tests/CLITests/main.swift"
 run_suite tabs             "$ROOT/Tests/TabTests/main.swift"
 run_suite layout           "$ROOT/Tests/LayoutTests/main.swift"
+run_suite trash            "$ROOT/Tests/TrashTests/main.swift"
 
 if [ "$failed" -eq 0 ]; then
     echo "모든 검증 통과"

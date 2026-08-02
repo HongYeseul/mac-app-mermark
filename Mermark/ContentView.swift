@@ -244,22 +244,27 @@ struct ContentView: View {
             Text("노트를 선택하세요")
                 .foregroundStyle(.secondary)
         } else {
-            HSplitView {
-                if mode != .viewer {
-                    MarkdownEditor(controller: editor, text: store.currentText, focusRequestID: store.focusRequestID)
+            // safeAreaInset이 아니라 VStack이어야 한다. safeAreaInset은 자식의 프레임을
+            // 줄이지 않고 안전 영역만 알려주는데, NSViewRepresentable로 감싼 NSScrollView와
+            // WKWebView는 그걸 무시하고 프레임 전체를 써서 본문이 탭 줄 밑으로 들어간다.
+            VStack(spacing: 0) {
+                NoteTabBar(store: store)
+                HSplitView {
+                    if mode != .viewer {
+                        MarkdownEditor(controller: editor, text: store.currentText, focusRequestID: store.focusRequestID)
+                            .frame(minWidth: 300)
+                    }
+                    if mode != .editor {
+                        MarkdownPreview(
+                            controller: preview,
+                            markdown: store.currentText,
+                            noteURL: store.selectedNoteURL,
+                            rootURL: store.workspaceURL(for: store.selectedNoteURL)
+                        )
                         .frame(minWidth: 300)
-                }
-                if mode != .editor {
-                    MarkdownPreview(
-                        controller: preview,
-                        markdown: store.currentText,
-                        noteURL: store.selectedNoteURL,
-                        rootURL: store.workspaceURL(for: store.selectedNoteURL)
-                    )
-                    .frame(minWidth: 300)
+                    }
                 }
             }
-            .safeAreaInset(edge: .top, spacing: 0) { NoteTabBar(store: store) }
         }
     }
 

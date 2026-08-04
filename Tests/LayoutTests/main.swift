@@ -105,6 +105,33 @@ pump(0.8)
 check("탭이 늘어도 본문 높이가 그대로", abs(beforeHeight - (scrollView?.frame.height ?? -2)) < 1,
       "\(Int(beforeHeight))pt → \(Int(scrollView?.frame.height ?? -2))pt")
 
+print("\n── D. 사라진 작업 공간이 화면을 가로막지 않는다")
+// 멀쩡한 공간이 있는데도 오류 화면이 뜨면 에디터가 화면에서 사라진다
+let 사라진공간 = sandbox.appendingPathComponent("사라진-공간")
+WorkspaceConfig.save([sandbox, 사라진공간])
+let mixed = NoteStore()
+pump(0.4)
+mixed.select(노트)
+let mixedHosting = NSHostingView(rootView: ContentView(store: mixed))
+mixedHosting.frame = NSRect(x: 0, y: 0, width: 1200, height: 700)
+let mixedWindow = NSWindow(contentRect: mixedHosting.frame,
+                           styleMask: [.titled, .resizable, .fullSizeContentView],
+                           backing: .buffered, defer: false)
+mixedWindow.toolbar = NSToolbar(identifier: "layout-test-2")
+mixedWindow.contentView = mixedHosting
+mixedWindow.makeKeyAndOrderFront(nil)
+pump(1.5)
+
+check("사라진 공간을 알아챘음", mixed.missingWorkspacePaths == [사라진공간.path],
+      "\(mixed.missingWorkspacePaths)")
+check("멀쩡한 공간은 연결돼 있음", mixed.workspaces.count == 1, "\(mixed.workspaces.map(\.name))")
+check("에디터가 그대로 보임",
+      find(NSScrollView.self, in: mixedHosting, where: { $0.documentView is NSTextView }) != nil,
+      "오류 화면이 본문을 덮음")
+check("프리뷰도 그대로 보임", find(WKWebView.self, in: mixedHosting) != nil, "오류 화면이 본문을 덮음")
+
+mixedWindow.orderOut(nil)
+
 window.orderOut(nil)
 try? fm.removeItem(at: sandbox)
 try? fm.removeItem(at: WorkspaceConfig.directory)

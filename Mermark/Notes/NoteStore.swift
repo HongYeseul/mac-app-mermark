@@ -123,6 +123,23 @@ final class NoteStore: ObservableObject {
         return true
     }
 
+    /// 확인 창을 띄우려고 잡아 둔 작업 공간
+    @Published private(set) var workspaceAwaitingDisconnect: Workspace?
+
+    func requestDisconnect(_ workspace: Workspace) {
+        workspaceAwaitingDisconnect = workspace
+    }
+
+    func cancelDisconnect() {
+        workspaceAwaitingDisconnect = nil
+    }
+
+    func confirmDisconnect() {
+        guard let workspace = workspaceAwaitingDisconnect else { return }
+        workspaceAwaitingDisconnect = nil
+        disconnectWorkspace(workspace)
+    }
+
     func disconnectWorkspace(_ workspace: Workspace) {
         workspaces.removeAll { $0.url == workspace.url }
         persistWorkspaces()

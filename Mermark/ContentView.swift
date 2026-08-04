@@ -54,7 +54,7 @@ struct ContentView: View {
                             noteRow(note)
                         }
                     } header: {
-                        workspaceHeader(workspace)
+                        WorkspaceHeader(store: store, workspace: workspace)
                     }
                 }
             }
@@ -91,6 +91,14 @@ struct ContentView: View {
         .navigationSubtitle(currentWorkspace?.displayPath ?? "")
         // 선택 강조·세그먼트 등 시스템 컨트롤까지 메인 색상을 따르게 한다
         .tint(Brand.accent)
+        .alert("작업 공간 연결을 해제할까요?", isPresented: disconnectConfirmation) {
+            Button("연결 해제", role: .destructive) { store.confirmDisconnect() }
+            Button("취소", role: .cancel) { store.cancelDisconnect() }
+        } message: {
+            if let workspace = store.workspaceAwaitingDisconnect {
+                Text("\(workspace.name)\n\(workspace.displayPath)\n\n목록에서만 빠지고 폴더와 파일은 그대로 남습니다.")
+            }
+        }
         .alert("휴지통으로 옮길까요?", isPresented: trashConfirmation) {
             Button("휴지통으로 이동", role: .destructive) { store.confirmTrash() }
             Button("취소", role: .cancel) { store.cancelTrash() }
@@ -127,29 +135,6 @@ struct ContentView: View {
                 else { collapsedWorkspaces.insert(workspace.url) }
             }
         )
-    }
-
-    /// 작업 공간 이름 줄. 누르면 접히고, + 로 그 안에 노트를 만든다.
-    private func workspaceHeader(_ workspace: Workspace) -> some View {
-        HStack(spacing: 4) {
-            Text(workspace.name)
-                .lineLimit(1)
-                .truncationMode(.middle)
-            Spacer(minLength: 4)
-            Button {
-                store.createNote(in: workspace.url)
-            } label: {
-                Image(systemName: "plus")
-            }
-            .buttonStyle(.borderless)
-            .help("\(workspace.name)에 새 노트")
-        }
-        .contextMenu {
-            Button("Finder에서 보기") { store.revealInFinder(workspace.url) }
-            Button("경로 복사") { copyPath(workspace.url) }
-            Divider()
-            Button("작업 공간 연결 해제") { store.disconnectWorkspace(workspace) }
-        }
     }
 
     private func noteRow(_ note: Note) -> some View {
@@ -349,6 +334,13 @@ struct ContentView: View {
             store.select(noteURL)
             if let anchor { preview.scroll(toAnchor: anchor) }
         }
+    }
+
+    private var disconnectConfirmation: Binding<Bool> {
+        Binding(
+            get: { store.workspaceAwaitingDisconnect != nil },
+            set: { shown in if !shown { store.cancelDisconnect() } }
+        )
     }
 
     private var trashConfirmation: Binding<Bool> {

@@ -155,6 +155,49 @@ final class NoteStore: ObservableObject {
         startWatching()
     }
 
+    /// 폴더째 지우려고 잡아 둔 작업 공간
+    @Published private(set) var workspaceAwaitingTrash: Workspace?
+
+    func requestWorkspaceTrash(_ workspace: Workspace) {
+        workspaceAwaitingTrash = workspace
+    }
+
+    func cancelWorkspaceTrash() {
+        workspaceAwaitingTrash = nil
+    }
+
+    @discardableResult
+    func confirmWorkspaceTrash() -> URL? {
+        guard let workspace = workspaceAwaitingTrash else { return nil }
+        workspaceAwaitingTrash = nil
+        return moveWorkspaceToTrash(workspace)
+    }
+
+    /// 그 작업 공간에 든 노트 수. 확인 창에서 몇 개가 함께 사라지는지 알리는 데 쓴다.
+    func noteCount(in workspace: Workspace) -> Int {
+        notes.filter { $0.workspaceURL == workspace.url }.count
+    }
+
+    /// 작업 공간 폴더를 통째로 휴지통으로 옮긴다. 안의 파일이 모두 함께 간다.
+    @discardableResult
+    func moveWorkspaceToTrash(_ workspace: Workspace) -> URL? {
+        // 대기 중인 자동 저장이 방금 지운 폴더에 파일을 되살리지 않도록 먼저 취소한다
+        if let selected = selectedNoteURL, isInside(selected, workspace.url) {
+            saveWorkItem?.cancel()
+            saveWorkItem = nil
+        }
+        // 폴더를 먼저 지운 뒤 목록에서 뺀다. 지우기가 실패하면 연결은 그대로 둔다.
+        var trashed: NSURL?
+        do {
+            try FileManager.default.trashItem(at: workspace.url, resultingItemURL: &trashed)
+        } catch {
+            NSLog("%@", "작업 공간을 휴지통으로 옮기지 못했습니다: \(error.localizedDescription)")
+            return nil
+        }
+        disconnectWorkspace(workspace)
+        return trashed as URL?
+    }
+
     private func persistWorkspaces() {
         // 앱과 CLI가 같은 파일을 본다. 지금 못 읽는 것도 남겨 둬야 돌아왔을 때 되살아난다.
         let missing = missingWorkspacePaths.map { URL(fileURLWithPath: $0) }

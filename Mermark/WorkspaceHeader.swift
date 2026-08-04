@@ -32,6 +32,12 @@ struct WorkspaceHeader: View {
                 Text("작업 공간 연결 해제")
                 Text("파일은 지우지 않습니다")
             }
+            Button(role: .destructive) {
+                store.requestWorkspaceTrash(workspace)
+            } label: {
+                Text("폴더째 휴지통으로 이동")
+                Text("폴더 안 파일이 모두 함께 갑니다")
+            }
         }
     }
 

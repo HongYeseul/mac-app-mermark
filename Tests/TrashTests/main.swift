@@ -120,6 +120,80 @@ check("잡아 둔 노트가 없으면 아무 일도 없음", store.confirmTrash(
 print("\n── F. 없는 파일")
 check("이미 없는 노트는 조용히 실패", store.moveToTrash(하나) == nil)
 
+print("\n── G. 작업 공간을 폴더째 휴지통으로")
+let 지울공간 = sandbox.appendingPathComponent("지울-공간")
+let 남길공간 = sandbox.appendingPathComponent("남길-공간")
+let 지울하위 = 지울공간.appendingPathComponent("하위")
+try! fm.createDirectory(at: 지울하위, withIntermediateDirectories: true)
+try! fm.createDirectory(at: 남길공간, withIntermediateDirectories: true)
+write("# 첫 노트\n", to: 지울공간.appendingPathComponent("첫 노트.md"))
+write("# 둘째 노트\n", to: 지울공간.appendingPathComponent("둘째 노트.md"))
+write("# 하위 노트\n", to: 지울하위.appendingPathComponent("하위 노트.md"))
+// .md가 아닌 파일도 함께 가야 한다
+try! Data([0x89, 0x50, 0x4E, 0x47]).write(to: 지울공간.appendingPathComponent("그림.png"))
+write("# 남는 노트\n", to: 남길공간.appendingPathComponent("남는 노트.md"))
+
+WorkspaceConfig.save([지울공간, 남길공간])
+let wsStore = NoteStore()
+pump(0.5)
+for tab in wsStore.openTabs { wsStore.closeTab(tab) }
+
+guard let 지울 = wsStore.workspaces.first(where: { $0.url.path == 지울공간.path }),
+      let 남길 = wsStore.workspaces.first(where: { $0.url.path == 남길공간.path }) else {
+    fatalError("작업 공간 준비 실패")
+}
+wsStore.select(남길공간.appendingPathComponent("남는 노트.md"))
+wsStore.select(지울공간.appendingPathComponent("첫 노트.md"))
+wsStore.select(지울하위.appendingPathComponent("하위 노트.md"))
+
+check("하위 폴더까지 세어 알려줌", wsStore.noteCount(in: 지울) == 3, "\(wsStore.noteCount(in: 지울))개")
+check("다른 공간은 따로 셈", wsStore.noteCount(in: 남길) == 1, "\(wsStore.noteCount(in: 남길))개")
+
+check("처음에는 창이 없음", wsStore.workspaceAwaitingTrash == nil)
+wsStore.requestWorkspaceTrash(지울)
+check("우클릭하면 창을 띄울 준비만 함", wsStore.workspaceAwaitingTrash == 지울,
+      wsStore.workspaceAwaitingTrash?.name ?? "nil")
+check("아직 폴더는 그대로", fm.fileExists(atPath: 지울공간.path))
+
+wsStore.cancelWorkspaceTrash()
+check("취소하면 창이 닫힘", wsStore.workspaceAwaitingTrash == nil)
+check("취소하면 폴더도 그대로", fm.fileExists(atPath: 지울공간.path))
+check("취소하면 연결도 그대로", wsStore.workspaces.contains(지울), "\(wsStore.workspaces.map(\.name))")
+
+wsStore.requestWorkspaceTrash(지울)
+let 지운공간 = wsStore.confirmWorkspaceTrash()
+if let 지운공간 { leftInTrash.append(지운공간) }
+pump(0.5)
+
+check("폴더가 원래 자리에서 사라짐", !fm.fileExists(atPath: 지울공간.path))
+check("휴지통에 폴더가 들어감", 지운공간 != nil && fm.fileExists(atPath: 지운공간!.path),
+      지운공간?.path ?? "nil")
+check("안의 노트도 함께 감",
+      지운공간.map { fm.fileExists(atPath: $0.appendingPathComponent("첫 노트.md").path) } == true)
+check("하위 폴더도 함께 감",
+      지운공간.map { fm.fileExists(atPath: $0.appendingPathComponent("하위/하위 노트.md").path) } == true)
+check(".md가 아닌 파일도 함께 감",
+      지운공간.map { fm.fileExists(atPath: $0.appendingPathComponent("그림.png").path) } == true)
+
+check("목록에서 빠짐", !wsStore.workspaces.contains(지울), "\(wsStore.workspaces.map(\.name))")
+check("설정 파일에서도 빠짐", !WorkspaceConfig.load().map(\.path).contains(지울공간.path),
+      "\(WorkspaceConfig.load().map(\.path))")
+check("그 공간의 탭이 모두 닫힘",
+      !wsStore.openTabs.contains { $0.path.hasPrefix(지울공간.path + "/") },
+      "\(wsStore.openTabs.map(\.lastPathComponent))")
+check("다른 공간의 탭은 남음",
+      wsStore.openTabs == [남길공간.appendingPathComponent("남는 노트.md")],
+      "\(wsStore.openTabs.map(\.lastPathComponent))")
+check("사라진 공간으로 잘못 표시하지 않음", wsStore.missingWorkspacePaths.isEmpty,
+      "\(wsStore.missingWorkspacePaths)")
+
+check("남길 공간은 그대로", fm.fileExists(atPath: 남길공간.appendingPathComponent("남는 노트.md").path))
+check("남길 공간 노트도 목록에 있음", wsStore.notes.contains { $0.title == "남는 노트" },
+      "\(wsStore.notes.map(\.title))")
+
+check("잡아 둔 공간이 없으면 아무 일도 없음", wsStore.confirmWorkspaceTrash() == nil)
+check("이미 없는 폴더는 조용히 실패", wsStore.moveWorkspaceToTrash(지울) == nil)
+
 // 검증이 휴지통에 남긴 것들을 치운다
 for url in leftInTrash { try? fm.removeItem(at: url) }
 check("검증이 휴지통에 남긴 것 정리", leftInTrash.allSatisfy { !fm.fileExists(atPath: $0.path) },

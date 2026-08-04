@@ -91,6 +91,14 @@ struct ContentView: View {
         .navigationSubtitle(currentWorkspace?.displayPath ?? "")
         // 선택 강조·세그먼트 등 시스템 컨트롤까지 메인 색상을 따르게 한다
         .tint(Brand.accent)
+        .alert("폴더째 휴지통으로 옮길까요?", isPresented: workspaceTrashConfirmation) {
+            Button("휴지통으로 이동", role: .destructive) { store.confirmWorkspaceTrash() }
+            Button("취소", role: .cancel) { store.cancelWorkspaceTrash() }
+        } message: {
+            if let workspace = store.workspaceAwaitingTrash {
+                Text("\(workspace.name)\n\(workspace.displayPath)\n\n노트 \(store.noteCount(in: workspace))개를 포함해 폴더 안의 모든 파일이 함께 갑니다. Finder 휴지통에서 되돌릴 수 있습니다.")
+            }
+        }
         .alert("작업 공간 연결을 해제할까요?", isPresented: disconnectConfirmation) {
             Button("연결 해제", role: .destructive) { store.confirmDisconnect() }
             Button("취소", role: .cancel) { store.cancelDisconnect() }
@@ -334,6 +342,13 @@ struct ContentView: View {
             store.select(noteURL)
             if let anchor { preview.scroll(toAnchor: anchor) }
         }
+    }
+
+    private var workspaceTrashConfirmation: Binding<Bool> {
+        Binding(
+            get: { store.workspaceAwaitingTrash != nil },
+            set: { shown in if !shown { store.cancelWorkspaceTrash() } }
+        )
     }
 
     private var disconnectConfirmation: Binding<Bool> {

@@ -41,8 +41,11 @@ final class NoteStore: ObservableObject {
     /// Cmd+N 직후 에디터로 포커스를 넘기기 위한 신호 (값이 바뀌면 에디터가 first responder가 됨)
     @Published private(set) var focusRequestID = 0
     @Published var searchQuery = ""
-    /// 저장된 노트 폴더를 쓸 수 없을 때. 화면에 사정을 알리고 다시 고르게 하려고 둔다.
-    @Published private(set) var unavailableFolderPath: String?
+    /// 연결해 뒀지만 지금 읽을 수 없는 작업 공간들.
+    ///
+    /// 설정에서 지우지 않고 남겨 둔다. 외장 디스크나 동기화 폴더는 잠깐 사라졌다가
+    /// 돌아오는데, 그때마다 연결을 잊어버리면 매번 다시 골라야 한다.
+    @Published private(set) var missingWorkspacePaths: [String] = []
     /// 메뉴에서 PDF 내보내기를 고르면 프리뷰 쪽에서 처리하도록 ContentView가 연결한다
     var onExportPDF: (() -> Void)?
 
@@ -61,9 +64,7 @@ final class NoteStore: ObservableObject {
 
         let saved = WorkspaceConfig.load().isEmpty ? Self.adoptWorkspacesFromDefaults() : WorkspaceConfig.load()
         // 옮겨지거나 지워진 작업 공간이 있으면 알린다. 빈 화면만 두면 무엇이 잘못됐는지 알 수 없다.
-        if let missing = saved.first(where: { !isUsableFolder($0.path) }) {
-            unavailableFolderPath = missing.path
-        }
+        missingWorkspacePaths = saved.filter { !isUsableFolder($0.path) }.map(\.path)
         workspaces = saved.filter { isUsableFolder($0.path) }.map { Workspace(url: $0) }
         if !workspaces.isEmpty {
             persistWorkspaces()
@@ -104,12 +105,15 @@ final class NoteStore: ObservableObject {
     func addWorkspace(_ url: URL) -> Bool {
         let standardized = WorkspaceConfig.normalize(url)
         guard isUsableFolder(standardized.path) else {
-            unavailableFolderPath = standardized.path
+            if !missingWorkspacePaths.contains(standardized.path) {
+                missingWorkspacePaths.append(standardized.path)
+            }
             return false
         }
         guard !workspaces.contains(where: { $0.url == standardized }) else { return false }
 
-        unavailableFolderPath = nil
+        // 못 읽던 폴더가 돌아온 것일 수도 있다
+        missingWorkspacePaths.removeAll { $0 == standardized.path }
         workspaces.append(Workspace(url: standardized))
         rememberRecentFolder(standardized)
         persistWorkspaces()
@@ -135,8 +139,15 @@ final class NoteStore: ObservableObject {
     }
 
     private func persistWorkspaces() {
-        // 앱과 CLI가 같은 파일을 본다
-        WorkspaceConfig.save(workspaces.map(\.url))
+        // 앱과 CLI가 같은 파일을 본다. 지금 못 읽는 것도 남겨 둬야 돌아왔을 때 되살아난다.
+        let missing = missingWorkspacePaths.map { URL(fileURLWithPath: $0) }
+        WorkspaceConfig.save(workspaces.map(\.url) + missing)
+    }
+
+    /// 사라진 작업 공간을 목록에서 지운다. 다시 안 쓸 때 알림을 없애는 용도.
+    func forgetMissingWorkspace(_ path: String) {
+        missingWorkspacePaths.removeAll { $0 == path }
+        persistWorkspaces()
     }
 
     /// 설정 파일이 생기기 전 UserDefaults에 저장하던 목록을 한 번만 옮겨 온다.
@@ -543,7 +554,9 @@ final class NoteStore: ObservableObject {
         saveWorkItem?.cancel()
         saveWorkItem = nil
 
-        unavailableFolderPath = missing.path
+        if !missingWorkspacePaths.contains(missing.path) {
+            missingWorkspacePaths.append(missing.path)
+        }
         workspaces.removeAll { $0.url == missing }
         persistWorkspaces()
         reloadNotes()

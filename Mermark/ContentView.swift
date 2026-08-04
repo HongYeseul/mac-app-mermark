@@ -220,20 +220,24 @@ struct ContentView: View {
 
     @ViewBuilder
     private var detail: some View {
-        if let missingPath = store.unavailableFolderPath {
+        if store.workspaces.isEmpty, !store.missingWorkspacePaths.isEmpty {
+            // 쓸 수 있는 작업 공간이 하나도 없을 때만 화면을 차지한다.
+            // 다른 공간이 멀쩡한데도 가로막으면 멀쩡한 노트까지 못 본다.
             VStack(spacing: 10) {
                 Image(systemName: "folder.badge.questionmark")
                     .font(.system(size: 34))
                     .foregroundStyle(.secondary)
-                Text("노트 폴더를 찾을 수 없습니다")
+                Text("작업 공간을 찾을 수 없습니다")
                     .font(.headline)
-                Text(missingPath)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .textSelection(.enabled)
-                    .lineLimit(3)
-                    .truncationMode(.middle)
-                    .frame(maxWidth: 420)
+                ForEach(store.missingWorkspacePaths, id: \.self) { path in
+                    Text((path as NSString).abbreviatingWithTildeInPath)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                        .lineLimit(3)
+                        .truncationMode(.middle)
+                        .frame(maxWidth: 420)
+                }
                 Text("폴더가 옮겨졌거나 지워졌습니다. 다시 연결해 주세요.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
@@ -258,6 +262,7 @@ struct ContentView: View {
             // 줄이지 않고 안전 영역만 알려주는데, NSViewRepresentable로 감싼 NSScrollView와
             // WKWebView는 그걸 무시하고 프레임 전체를 써서 본문이 탭 줄 밑으로 들어간다.
             VStack(spacing: 0) {
+                missingWorkspaceNotice
                 NoteTabBar(store: store)
                 HSplitView {
                     if mode != .viewer {
@@ -275,6 +280,30 @@ struct ContentView: View {
                     }
                 }
             }
+        }
+    }
+
+    /// 못 읽는 작업 공간이 있어도 나머지는 그대로 쓸 수 있어야 한다.
+    /// 화면을 가로막지 않고 위에 한 줄로만 알린다.
+    @ViewBuilder
+    private var missingWorkspaceNotice: some View {
+        ForEach(store.missingWorkspacePaths, id: \.self) { path in
+            HStack(spacing: 8) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+                Text("작업 공간을 찾을 수 없습니다: \((path as NSString).abbreviatingWithTildeInPath)")
+                    .font(.callout)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Spacer(minLength: 8)
+                Button("다시 연결…") { store.connectWorkspace() }
+                Button("목록에서 지우기") { store.forgetMissingWorkspace(path) }
+            }
+            .buttonStyle(.link)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(.yellow.opacity(0.12))
+            .overlay(alignment: .bottom) { Divider() }
         }
     }
 

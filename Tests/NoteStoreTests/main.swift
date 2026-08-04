@@ -217,8 +217,8 @@ WorkspaceConfig.save([URL(fileURLWithPath: goneDir.path + "-없는경로")])
 let missingStore = NoteStore()
 pump(0.3)
 check("없는 경로면 폴더를 열지 않음", missingStore.workspaces.isEmpty)
-check("없는 경로를 알려줌", missingStore.unavailableFolderPath == goneDir.path + "-없는경로",
-      missingStore.unavailableFolderPath ?? "nil")
+check("없는 경로를 알려줌", missingStore.missingWorkspacePaths == [goneDir.path + "-없는경로"],
+      "\(missingStore.missingWorkspacePaths)")
 
 // 2) 폴더가 아니라 파일을 가리켜도 마찬가지
 let filePath = goneDir.appendingPathComponent("노트.md").path
@@ -226,23 +226,23 @@ WorkspaceConfig.save([URL(fileURLWithPath: filePath)])
 let filePointingStore = NoteStore()
 pump(0.3)
 check("폴더가 아닌 경로도 걸러냄", filePointingStore.workspaces.isEmpty
-      && filePointingStore.unavailableFolderPath == filePath,
-      filePointingStore.unavailableFolderPath ?? "nil")
+      && filePointingStore.missingWorkspacePaths == [filePath],
+      "\(filePointingStore.missingWorkspacePaths)")
 
 // 3) 정상 폴더면 안내를 띄우지 않는다
 WorkspaceConfig.save([goneDir])
 let liveStore = NoteStore()
 pump(0.4)
-check("정상 폴더면 안내 없음", !liveStore.workspaces.isEmpty && liveStore.unavailableFolderPath == nil,
-      liveStore.unavailableFolderPath ?? "nil")
+check("정상 폴더면 안내 없음", !liveStore.workspaces.isEmpty && liveStore.missingWorkspacePaths.isEmpty,
+      "\(liveStore.missingWorkspacePaths)")
 check("노트도 정상적으로 읽힘", liveStore.notes.count == 1, "\(liveStore.notes.count)")
 
 // 4) 쓰던 중에 폴더가 사라지면 알아채고 정리한다
 liveStore.textChanged("# 노트\n저장 대기 중인 내용")
 try! fm.removeItem(at: goneDir)
 pump(2.0)
-check("사용 중 폴더가 사라지면 알아챔", liveStore.unavailableFolderPath == goneDir.path,
-      liveStore.unavailableFolderPath ?? "nil")
+check("사용 중 폴더가 사라지면 알아챔", liveStore.missingWorkspacePaths == [goneDir.path],
+      "\(liveStore.missingWorkspacePaths)")
 check("목록과 선택을 비움",
       liveStore.notes.isEmpty && liveStore.selectedNoteURL == nil && liveStore.workspaces.isEmpty,
       "노트 \(liveStore.notes.count)개")
@@ -354,6 +354,47 @@ try! "# 나중에 추가".write(to: nested.appendingPathComponent("나중.md"), 
 pump(1.5)
 check("하위 폴더의 외부 추가도 감지", spaces.notes.contains { $0.title == "나중" },
       "\(spaces.notes.map(\.title))")
+
+print("\n── J. 한 곳이 사라져도 나머지는 그대로")
+let 살아있는공간 = rootDir.appendingPathComponent("살아있는-공간")
+let 사라질공간 = rootDir.appendingPathComponent("사라질-공간")
+try? fm.removeItem(at: 살아있는공간)
+try? fm.removeItem(at: 사라질공간)
+try! fm.createDirectory(at: 살아있는공간, withIntermediateDirectories: true)
+try! fm.createDirectory(at: 사라질공간, withIntermediateDirectories: true)
+try! "# 살아있음\n".write(to: 살아있는공간.appendingPathComponent("살아있음.md"), atomically: true, encoding: .utf8)
+try! fm.removeItem(at: 사라질공간)
+
+WorkspaceConfig.save([살아있는공간, 사라질공간])
+let mixedStore = NoteStore()
+RunLoop.main.run(until: Date().addingTimeInterval(0.4))
+
+check("멀쩡한 공간은 그대로 연결됨", mixedStore.workspaces.map(\.url.path) == [살아있는공간.path],
+      "\(mixedStore.workspaces.map(\.name))")
+check("사라진 공간을 알려줌", mixedStore.missingWorkspacePaths == [사라질공간.path],
+      "\(mixedStore.missingWorkspacePaths)")
+check("멀쩡한 공간의 노트는 보임", mixedStore.notes.contains { $0.title == "살아있음" },
+      "\(mixedStore.notes.map(\.title))")
+check("노트가 열려 있음", mixedStore.selectedNoteURL != nil, "nil")
+
+// 설정에서 지우지 않아야 폴더가 다시 나타났을 때 되살아난다
+check("사라진 공간도 설정에 남아 있음",
+      WorkspaceConfig.load().map(\.path).contains(사라질공간.path),
+      "\(WorkspaceConfig.load().map(\.path))")
+
+try! fm.createDirectory(at: 사라질공간, withIntermediateDirectories: true)
+check("돌아오면 다시 연결됨", mixedStore.addWorkspace(사라질공간))
+check("알림이 사라짐", mixedStore.missingWorkspacePaths.isEmpty, "\(mixedStore.missingWorkspacePaths)")
+check("두 공간 모두 연결됨", mixedStore.workspaces.count == 2, "\(mixedStore.workspaces.map(\.name))")
+
+try! fm.removeItem(at: 사라질공간)
+RunLoop.main.run(until: Date().addingTimeInterval(1.5))
+check("다시 사라지면 또 알려줌", mixedStore.missingWorkspacePaths == [사라질공간.path],
+      "\(mixedStore.missingWorkspacePaths)")
+mixedStore.forgetMissingWorkspace(사라질공간.path)
+check("지우면 알림이 없어짐", mixedStore.missingWorkspacePaths.isEmpty)
+check("지우면 설정에서도 빠짐", !WorkspaceConfig.load().map(\.path).contains(사라질공간.path),
+      "\(WorkspaceConfig.load().map(\.path))")
 
 print("\n" + (failures.isEmpty ? "ALL PASS (\(total) checks)" : "FAILURES(\(failures.count)/\(total)): \(failures.joined(separator: ", "))"))
 try? fm.removeItem(at: rootDir)
